@@ -1,38 +1,46 @@
-include(vcpkg_common_functions)
-
-string(LENGTH "${CURRENT_BUILDTREES_DIR}" BUILDTREES_PATH_LENGTH)
-if(BUILDTREES_PATH_LENGTH GREATER 37 AND CMAKE_HOST_WIN32)
-    message(WARNING "${PORT}'s buildsystem uses very long paths and may fail on your system.\n"
-        "We recommend moving vcpkg to a short path such as 'C:\\src\\vcpkg' or using the subst command."
-    )
+vcpkg_buildpath_length_warning(37)
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 endif()
 
-vcpkg_from_github(
-  OUT_SOURCE_PATH SOURCE_PATH
-  REPO apache/avro
-  REF release-1.8.2
-  SHA512 a48cc353aadd45ad2c8593bf89ec3f1ddb0fcd364b79dd002a60a54d49cab714b46eee8bd6dc47b13588b9eead49c754dfe05f6aff735752fca8d2cd35ae8649
-  HEAD_REF master
-  PATCHES
-        avro.patch
-        avro-pr-217.patch
-        fix-build-error.patch # Since jansson updated, use jansson::jansson instead of the macro ${JANSSON_LIBRARIES}
+vcpkg_download_distfile(ARCHIVE
+    URLS "https://archive.apache.org/dist/avro/avro-${VERSION}/avro-src-${VERSION}.tar.gz"
+    FILENAME "avro-src-${VERSION}.tar.gz"
+    SHA512 0d86bfece0f12f8bc424e27e71e3e6b828c4280fa1a6d7dc7e0d58bff2351f2c1fd3ccb98c1291dfc6c67d9cb5a0bdb7bb9f36ba5bd6b26fa9545f358db42663
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}/lang/c
-    PREFER_NINJA
+vcpkg_extract_source_archive(
+    SOURCE_PATH
+    ARCHIVE "${ARCHIVE}"
+    PATCHES
+        avro.patch          # Private vcpkg build fixes
+        bswap.patch
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}/lang/c"
     OPTIONS
-        -DCMAKE_DISABLE_FIND_PACKAGE_Snappy=ON
+        -DBUILD_EXAMPLES=OFF
+        -DBUILD_TESTS=OFF
+        -DBUILD_DOCS=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
 vcpkg_copy_pdbs()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/bin)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+# the files are broken and there is no way to fix it because the snappy dependency has no pkgconfig file
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib/pkgconfig" "${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig")
 
-file(COPY ${SOURCE_PATH}/lang/c/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/avro-c)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/avro-c/LICENSE ${CURRENT_PACKAGES_DIR}/share/avro-c/copyright)
+vcpkg_copy_tools(TOOL_NAMES avroappend avrocat AUTO_CLEAN)
+
+if(NOT VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_copy_tools(TOOL_NAMES avropipe avromod AUTO_CLEAN)
+endif()
+
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static" AND NOT VCPKG_TARGET_IS_WINDOWS)
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin" "${CURRENT_PACKAGES_DIR}/debug/bin")
+endif()
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/lang/c/LICENSE")

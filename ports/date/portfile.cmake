@@ -1,6 +1,4 @@
-include(vcpkg_common_functions)
-
-if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
+if(VCPKG_TARGET_IS_WINDOWS)
   message(WARNING
     "You will need to also install https://raw.githubusercontent.com/unicode-org/cldr/master/common/supplemental/windowsZones.xml into your install location.\n"
     "See https://howardhinnant.github.io/date/tz.html"
@@ -10,37 +8,34 @@ endif()
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO HowardHinnant/date
-  REF ed0368fc75427ef05cefdf19a39b60d7bed2f039
-  SHA512 5f6a0d7e094fd1ab7b6a1ea9a96e467138220e9207e2eda68f71b68d6c56759e7470fabdfa920d92876e9c9b466e56ea8102333f407a46bb4cba43a2dfeb5e3a
+  REF "v${VERSION}"
+  SHA512 9bffca5c7cfd1769f66bef330fe4ef0ad2512a8afd229ddb4043a4f166741e697c7a5fbdddf29f7157b3fc2c2c2a80fa7cff45078f1d8ab248d3b07e14518fcf
   HEAD_REF master
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
-
-set(HAS_REMOTE_API 0)
-if("remote-api" IN_LIST FEATURES)
-  set(HAS_REMOTE_API 1)
-endif()
-
-vcpkg_configure_cmake(
-  SOURCE_PATH ${SOURCE_PATH}
-  PREFER_NINJA
-  OPTIONS -DHAS_REMOTE_API=${HAS_REMOTE_API}
-  OPTIONS_DEBUG -DDISABLE_INSTALL_HEADERS=ON
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    INVERTED_FEATURES
+    remote-api USE_SYSTEM_TZ_DB
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_configure(
+  SOURCE_PATH "${SOURCE_PATH}"
+  OPTIONS
+    ${FEATURE_OPTIONS}
+    -DBUILD_TZ_LIB=ON
+)
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH share/unofficial-date TARGET_PATH share/unofficial-date)
+vcpkg_cmake_install()
+
+if(VCPKG_TARGET_IS_WINDOWS)
+  vcpkg_cmake_config_fixup(CONFIG_PATH CMake)
+else()
+  vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/date")
+endif()
 
 vcpkg_copy_pdbs()
 
-set(HEADER "${CURRENT_PACKAGES_DIR}/include/date/tz.h")
-file(READ "${HEADER}" _contents)
-string(REPLACE "#define TZ_H" "#define TZ_H\n#undef HAS_REMOTE_API\n#define HAS_REMOTE_API ${HAS_REMOTE_API}" _contents "${_contents}")
-if(VCPKG_LIBRARY_LINKAGE STREQUAL dynamic)
-  string(REPLACE "ifdef DATE_BUILD_DLL" "if 1" _contents "${_contents}")
-endif()
-file(WRITE "${HEADER}" "${_contents}")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-file(INSTALL ${SOURCE_PATH}/LICENSE.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/date RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")

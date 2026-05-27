@@ -1,31 +1,118 @@
-# libgit2 uses winapi functions not available in WindowsStore
-if (VCPKG_CMAKE_SYSTEM_NAME STREQUAL WindowsStore)
-    message(FATAL_ERROR "Error: UWP builds are not supported.")
-endif()
-
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO libgit2/libgit2
-    REF b3e1a56ebb2b9291e82dc027ba9cbcfc3ead54d3
-    SHA512 2a992759c0892300eff6d4e823367e2cfc5bcaa6e37a0e87de45a16393c53ccd286f47f37d38c104e79eed8688b9834ada00000b2d6894f89773f75c83e23022
-    HEAD_REF master
+    REF "v${VERSION}"
+    SHA512 b9ac2d0a7cc92a31057fbf066e47145cdda89ebf0489d712d4452c709c3de9923a93a3c37128fdcfd8fbb5498f513a519a7f2a77ad6ef4efafe865323d481f18
+    HEAD_REF main
+    PATCHES
+        c-standard.diff # for 'inline' in system headers
+        cli-include-dirs.diff
+        dependencies.diff
+        mingw-winhttp.diff
+)
+file(REMOVE_RECURSE
+    "${SOURCE_PATH}/cmake/FindPCRE.cmake"
+    "${SOURCE_PATH}/cmake/FindPCRE2.cmake"
+    "${SOURCE_PATH}/deps/chromium-zlib"
+    "${SOURCE_PATH}/deps/http-parser"
+    "${SOURCE_PATH}/deps/pcre"
+    "${SOURCE_PATH}/deps/winhttp"
+    "${SOURCE_PATH}/deps/zlib"
 )
 
 string(COMPARE EQUAL "${VCPKG_CRT_LINKAGE}" "static" STATIC_CRT)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DBUILD_CLAR=OFF
-        -DSTATIC_CRT=${STATIC_CRT}
+set(REGEX_BACKEND OFF)
+set(USE_HTTPS OFF)
+set(USE_SSH OFF)
+
+function(set_regex_backend VALUE)
+    if(REGEX_BACKEND)
+        message(FATAL_ERROR "Only one regex backend (pcre,pcre2) is allowed")
+    endif()
+    set(REGEX_BACKEND ${VALUE} PARENT_SCOPE)
+endfunction()
+
+function(set_tls_backend VALUE)
+    if(USE_HTTPS)
+        message(FATAL_ERROR "Only one TLS backend (openssl,winhttp,sectransp,mbedtls) is allowed")
+    endif()
+    set(USE_HTTPS ${VALUE} PARENT_SCOPE)
+endfunction()
+
+foreach(GIT2_FEATURE ${FEATURES})
+    if(GIT2_FEATURE STREQUAL "pcre")
+        set_regex_backend("pcre")
+    elseif(GIT2_FEATURE STREQUAL "pcre2")
+        set_regex_backend("pcre2")
+    elseif(GIT2_FEATURE STREQUAL "openssl")
+        set_tls_backend("OpenSSL")
+    elseif(GIT2_FEATURE STREQUAL "winhttp")
+        set_tls_backend("WinHTTP")
+    elseif(GIT2_FEATURE STREQUAL "sectransp")
+        set_tls_backend("SecureTransport")
+    elseif(GIT2_FEATURE STREQUAL "mbedtls")
+        set_tls_backend("mbedTLS")
+    elseif(GIT2_FEATURE STREQUAL "ssh")
+        set(USE_SSH ON)
+        message(STATUS "This version of `libgit2` uses the default (`libssh2`) backend. To use the newer backend which utilizes the `ssh` CLI from a local install of OpenSSH instead, create an overlay port of this with USE_SSH set to 'exec' and the `libssh2` dependency removed.")
+        message(STATUS "This recipe is at ${CMAKE_CURRENT_LIST_DIR}")
+        message(STATUS "See the overlay ports documentation at https://learn.microsoft.com/vcpkg/concepts/overlay-ports")
+    endif()
+endforeach()
+
+if(NOT REGEX_BACKEND)
+    message(FATAL_ERROR "Must choose pcre or pcre2 regex backend")
+endif()
+
+vcpkg_find_acquire_program(PKGCONFIG)
+
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS GIT2_FEATURES
+    FEATURES
+        tools   BUILD_CLI
+        sha256  EXPERIMENTAL_SHA256
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DBUILD_TESTS=OFF
+        -DUSE_HTTP_PARSER=system
+        -DUSE_HTTPS=${USE_HTTPS}
+        -DREGEX_BACKEND=${REGEX_BACKEND}
+        -DUSE_SSH=${USE_SSH}
+        -DSTATIC_CRT=${STATIC_CRT}
+        "-DPKG_CONFIG_EXECUTABLE=${PKGCONFIG}"
+        -DCMAKE_DISABLE_FIND_PACKAGE_GSSAPI:BOOL=ON
+        ${GIT2_FEATURES}
+    OPTIONS_DEBUG
+        -DBUILD_CLI=OFF
+    MAYBE_UNUSED_VARIABLES
+        STATIC_CRT
+)
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+vcpkg_cmake_install()
+vcpkg_fixup_pkgconfig()
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}")
 
-file(COPY ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/libgit2)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/libgit2/COPYING ${CURRENT_PACKAGES_DIR}/share/libgit2/copyright)
+if("tools" IN_LIST FEATURES)
+    # Since SHA256 is considered an "experimental" feature, it renames the executable. This renames it back.
+    if("sha256" IN_LIST FEATURES)
+        file(RENAME "${CURRENT_PACKAGES_DIR}/bin/git2-experimental${VCPKG_TARGET_EXECUTABLE_SUFFIX}" "${CURRENT_PACKAGES_DIR}/bin/git2${VCPKG_TARGET_EXECUTABLE_SUFFIX}")
+    endif()
+
+    vcpkg_copy_tools(TOOL_NAMES git2 AUTO_CLEAN)
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+
+set(file_list "${SOURCE_PATH}/COPYING")
+if(NOT VCPKG_TARGET_IS_WINDOWS)
+    file(WRITE "${CURRENT_BUILDTREES_DIR}/Notice for ntlmclient" [[
+Copyright (c) Edward Thomson.  All rights reserved.
+These source files are part of ntlmclient, distributed under the MIT license.
+]])
+    list(APPEND file_list "${CURRENT_BUILDTREES_DIR}/Notice for ntlmclient")
+endif()
+vcpkg_install_copyright(FILE_LIST ${file_list})

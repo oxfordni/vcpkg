@@ -1,23 +1,24 @@
 # header-only library
 
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO QuantStack/xtensor
-    REF 0.20.7
-    SHA512 de09900d0934f9b10453f16e43d1c3af28503f365224f9c6789b88a0cf00db820ca31e12099df1a2e3aafa73d7d83223df82f01b7611c1addb48367f936e5122
+    REPO xtensor-stack/xtensor
+    REF "${VERSION}"
+    SHA512 3f3fe2391df91518cfef4983ff66bf3b79940136582bb99c6270f87481bf9d2cc15605b13f9b70b6ee9a7a89b389037dd2b26362fcae0fdc49f5204872ee5291
     HEAD_REF master
+    PATCHES
+        fix-find-tbb-and-install-destination.patch
+        fix-find-xsimd.patch
 )
 
-vcpkg_check_features(
-    xsimd XTENSOR_USE_XSIMD
-    tbb XTENSOR_USE_TBB
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        xsimd XTENSOR_USE_XSIMD
+        tbb XTENSOR_USE_TBB
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DXTENSOR_ENABLE_ASSERT=OFF
         -DXTENSOR_CHECK_DIMENSION=OFF
@@ -30,14 +31,10 @@ vcpkg_configure_cmake(
         ${FEATURE_OPTIONS}
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/${PORT})
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/${PORT})
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/lib)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
 
-# Handle copyright
-configure_file(${SOURCE_PATH}/LICENSE ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
-
-# CMake integration test
-vcpkg_test_cmake(PACKAGE_NAME ${PORT})
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

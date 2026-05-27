@@ -1,24 +1,32 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO KhronosGroup/OpenGL-Registry
-  REF e18e52a14e902a9ee29c5bf87478ac2ca21bb06b
-  SHA512 3b883115e138178984a751ee314b0589a7a20db3bc7cff96fa0b886be1779c24031ce65847386aa2d4f42823b1597edccc5a9afc0aef42fea8611a44d2ca5df6
+  REF 0b449b97cdf1043eef5e1f0e235cbbab6ec10c86
+  SHA512 148e1bfe4cc199bcc2c23b22d0b3e4988a29389d7f510ba4a6340672dbb7ab99bb836d2c08587499484df704d51a1adf4f0dc3a30d5ad8977ee0ad339163b17e
   HEAD_REF master
 )
 
-file(COPY ${SOURCE_PATH}/api/GL DESTINATION ${CURRENT_PACKAGES_DIR}/include)
+file(COPY "${SOURCE_PATH}/api/GL" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(COPY "${SOURCE_PATH}/api/GLES" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(COPY "${SOURCE_PATH}/api/GLES2" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(COPY "${SOURCE_PATH}/api/GLES3" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(COPY "${SOURCE_PATH}/api/GLSC" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(COPY "${SOURCE_PATH}/api/GLSC2" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+
+file(GLOB reg_files "${SOURCE_PATH}/xml/*.xml" "${SOURCE_PATH}/xml/readme.pdf" "${SOURCE_PATH}/xml/*.rnc" "${SOURCE_PATH}/xml/reg.py")
 file(COPY
-  ${SOURCE_PATH}/xml/gl.xml
-  ${SOURCE_PATH}/xml/glx.xml
-  ${SOURCE_PATH}/xml/wgl.xml
-  DESTINATION ${CURRENT_PACKAGES_DIR}/share/opengl-registry
+  ${reg_files}
+  DESTINATION "${CURRENT_PACKAGES_DIR}/share/opengl"
 )
 
-# Using the Makefile because it is the smallest file with a complete copy of the license text
-file(
-  INSTALL ${SOURCE_PATH}/xml/Makefile
-  DESTINATION ${CURRENT_PACKAGES_DIR}/share/opengl-registry
-  RENAME copyright
-)
+vcpkg_install_copyright(FILE_LIST "${CURRENT_PORT_DIR}/copyright")
+
+# pc layout from cygwin (consumed in xserver!)
+file(WRITE "${CURRENT_PACKAGES_DIR}/share/pkgconfig/khronos-opengl-registry.pc" [=[
+prefix=${pcfiledir}/../..
+datadir=${prefix}/share
+specdir=${datadir}/opengl
+Name: khronos-opengl-registry
+Description: Khronos OpenGL registry
+Version: git3530768138c5ba3dfbb2c43c830493f632f7ea33
+]=])

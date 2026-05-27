@@ -1,23 +1,31 @@
-#header-only library
-include(vcpkg_common_functions)
+set(VCPKG_BUILD_TYPE release)  # header-only
 
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/jwt-cpp)
-
-vcpkg_from_github(OUT_SOURCE_PATH SOURCE_PATH
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
     REPO Thalhammer/jwt-cpp
-    REF 1d2b1bac13e54f99df4f890cd674ec149c135762
-    SHA512 a45f12104e38a8b05a0ea5b5f91034b65d85dd048664bbda4f2909df32688726d599161e3d6541fd6f36c784d21c24a4d2666f670c3281b9e9130bc8a96fce39
+    REF "v${VERSION}"
+    SHA512 9a2725228565d671e065a4647dad38f36251a4ee07c796cac35252557134a20c2dc260f62c011438c7fbde57f5c511bb0096569512c0aebdae048c7a626805b7
     HEAD_REF master
-    PATCHES fix-picojson.patch
-            fix-warning.patch)
+    PATCHES
+        picojson_from_vcpkg.patch
+)
+file(REMOVE_RECURSE "${SOURCE_PATH}/include/picojson")
 
-# Copy the header files
-file(GLOB HEADER_FILES ${SOURCE_PATH}/include/jwt-cpp/*)
-file(COPY ${HEADER_FILES}
-     DESTINATION ${CURRENT_PACKAGES_DIR}/include/jwt-cpp
-     REGEX "\.(gitattributes|gitignore|picojson.h)$" EXCLUDE)
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    INVERTED_FEATURES
+        picojson JWT_DISABLE_PICOJSON
+)
 
-# Put the licence file where vcpkg expects it
-file(COPY ${SOURCE_PATH}/LICENSE
-     DESTINATION ${CURRENT_PACKAGES_DIR}/share/jwt-cpp)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/jwt-cpp/LICENSE ${CURRENT_PACKAGES_DIR}/share/jwt-cpp/copyright)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DJWT_EXTERNAL_PICOJSON=ON
+        -DJWT_BUILD_EXAMPLES=OFF
+        -DJWT_CMAKE_FILES_INSTALL_DIR=share/${PORT}
+)
+
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup()
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

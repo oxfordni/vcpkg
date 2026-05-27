@@ -1,37 +1,35 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO DanBloomberg/leptonica
-    REF 1.76.0
-    SHA512 0d7575dc38d1e656a228ef30412a2cbb908b9c7c8636e4e96f4a7dc0429c04709316b8ad04893285ab430c1b2063d71537fc5b989a0f9dbdbec488713e1bab1f
+    REF "${VERSION}"
+    SHA512 2a1953dd0c962a05dac9bb30eac311896f414c658d976008b0c2d1b3b85ec25c5fd811be3f98a37f2131ded134799ea609a667fb1eaacf42d1aca9cc5cf1bd92
     HEAD_REF master
     PATCHES
-        ${CMAKE_CURRENT_LIST_DIR}/fix-cmakelists.patch
-        ${CMAKE_CURRENT_LIST_DIR}/use-tiff-libraries.patch
-        ${CMAKE_CURRENT_LIST_DIR}/find-dependency.patch
+        fix-pc-and-config.patch
 )
 
-string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" STATIC)
+vcpkg_find_acquire_program(PKGCONFIG)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DSTATIC=${STATIC}
-        -DCMAKE_REQUIRED_INCLUDES=${CURRENT_INSTALLED_DIR}/include # for check_include_file()
+        -DSW_BUILD=OFF
+        "-DPKG_CONFIG_EXECUTABLE=${PKGCONFIG}"
+        -DCMAKE_REQUIRE_FIND_PACKAGE_GIF=TRUE
+        -DCMAKE_REQUIRE_FIND_PACKAGE_JPEG=TRUE
+        -DCMAKE_REQUIRE_FIND_PACKAGE_PNG=TRUE
+        -DCMAKE_REQUIRE_FIND_PACKAGE_TIFF=TRUE
+        -DCMAKE_REQUIRE_FIND_PACKAGE_ZLIB=TRUE
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH cmake)
+vcpkg_fixup_pkgconfig()
+
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/leptonica)
 
 vcpkg_copy_pdbs()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/lib/pkgconfig)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-# Handle copyright
-file(COPY ${SOURCE_PATH}/leptonica-license.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/leptonica)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/leptonica/leptonica-license.txt ${CURRENT_PACKAGES_DIR}/share/leptonica/copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/leptonica-license.txt")

@@ -1,112 +1,96 @@
-## # vcpkg_check_features
-##
-## Check if one or more features are a part of the package installation.
-##
-## ## Usage
-## ```cmake
-## vcpkg_check_features(
-##     <feature1> <output_variable1>
-##     [<feature2> <output_variable2>]
-##     ...
-## )
-## ```
-##
-## `vcpkg_check_features` accepts a list of (feature, output_variable) pairs. If a feature is specified, the corresponding output variable will be set as `ON`, or `OFF` otherwise. The syntax is similar to the `PROPERTIES` argument of `set_target_properties`.
-##
-## `vcpkg_check_features` will create a variable `FEATURE_OPTIONS` in the parent scope, which you can pass as a part of `OPTIONS` argument when calling functions like `vcpkg_config_cmake`:
-## ```cmake
-## vcpkg_config_cmake(
-##     SOURCE_PATH ${SOURCE_PATH}
-##     PREFER_NINJA
-##     OPTIONS
-##         -DBUILD_TESTING=ON
-##         ${FEATURE_OPTIONS}
-## )
-## ```
-##
-## ## Notes
-## ```cmake
-## vcpkg_check_features(<feature> <output_variable>)
-## ```
-## can be used as a replacement of:
-## ```cmake
-## if(<feature> IN_LIST FEATURES)
-##     set(<output_variable> ON)
-## else()
-##     set(<output_variable> OFF)
-## endif()
-## ```
-##
-## However, if you have a feature that was checked like this before:
-## ```cmake
-## if(<feature> IN_LIST FEATURES)
-##     set(<output_variable> OFF)
-## else()
-##     set(<output_variable> ON)
-## endif()
-## ```
-## then you should not use `vcpkg_check_features` instead. [```oniguruma```](https://github.com/microsoft/vcpkg/blob/master/ports/oniguruma/portfile.cmake), for example, has a feature named `non-posix` which is checked with:
-## ```cmake
-## if("non-posix" IN_LIST FEATURES)
-##     set(ENABLE_POSIX_API OFF)
-## else()
-##     set(ENABLE_POSIX_API ON)
-## endif()
-## ```
-## and by replacing these code with:
-## ```cmake
-## vcpkg_check_features(non-posix ENABLE_POSIX_API)
-## ```
-## is totally wrong.
-##
-## `vcpkg_check_features` is supposed to be called only once. Otherwise, the `FEATURE_OPTIONS` variable set by a previous call will be overwritten.
-##
-## ## Examples
-##
-## * [czmq](https://github.com/microsoft/vcpkg/blob/master/ports/czmq/portfile.cmake)
-## * [xsimd](https://github.com/microsoft/vcpkg/blob/master/ports/xsimd/portfile.cmake)
-## * [xtensor](https://github.com/microsoft/vcpkg/blob/master/ports/xtensor/portfile.cmake)
-function(vcpkg_check_features)
-    cmake_parse_arguments(_vcf "" "" "" ${ARGN})
-
-    list(LENGTH ARGN _vcf_ARGC)
-    math(EXPR _vcf_INCORRECT_ARGN "${_vcf_ARGC} % 2")
-
-    if(_vcf_INCORRECT_ARGN)
-        message(FATAL_ERROR "Called with incorrect number of arguments.")
+function(z_vcpkg_check_features_last_feature out_var features_name features_list)
+    list(LENGTH features_list features_length)
+    math(EXPR features_length_mod_2 "${features_length} % 2")
+    if(NOT features_length_mod_2 EQUAL 0)
+        message(FATAL_ERROR "vcpkg_check_features has an incorrect number of arguments to ${features_name}")
     endif()
 
-    set(_vcf_IS_FEATURE_ARG ON)
-    set(_vcf_FEATURE_OPTIONS)
+    math(EXPR last_feature "${features_length} / 2 - 1")
+    set("${out_var}" "${last_feature}" PARENT_SCOPE)
+endfunction()
 
-    # Process (feature, output_var) pairs
-    foreach(_vcf_ARG ${ARGN})
-        if(_vcf_IS_FEATURE_ARG)
-            set(_vcf_FEATURE ${_vcf_ARG})
+function(z_vcpkg_check_features_get_feature idx features_list out_feature_name out_feature_var)
+    math(EXPR feature_name_idx "${idx} * 2")
+    math(EXPR feature_var_idx "${feature_name_idx} + 1")
 
-            if(NOT ${_vcf_FEATURE} IN_LIST ALL_FEATURES)
-                message(FATAL_ERROR "Unknown feature: ${_vcf_FEATURE}")
-            endif()
+    list(GET features_list "${feature_name_idx}" feature_name)
+    list(GET features_list "${feature_var_idx}" feature_var)
 
-            set(_vcf_IS_FEATURE_ARG OFF)
-        else()
-            set(_vcf_FEATURE_VAR ${_vcf_ARG})
+    set("${out_feature_name}" "${feature_name}" PARENT_SCOPE)
+    set("${out_feature_var}" "${feature_var}" PARENT_SCOPE)
+endfunction()
 
-            if(${_vcf_FEATURE} IN_LIST FEATURES)
-                set(${_vcf_FEATURE_VAR} ON PARENT_SCOPE)
-                list(APPEND _vcf_FEATURE_OPTIONS "-D${_vcf_FEATURE_VAR}=ON")
+function(vcpkg_check_features)
+    cmake_parse_arguments(
+        PARSE_ARGV 0 "arg"
+        ""
+        "OUT_FEATURE_OPTIONS;PREFIX"
+        "FEATURES;INVERTED_FEATURES"
+    )
+
+    if(NOT DEFINED arg_OUT_FEATURE_OPTIONS)
+        message(FATAL_ERROR "OUT_FEATURE_OPTIONS must be defined.")
+    endif()
+    if(NOT DEFINED arg_PREFIX)
+        set(prefix "")
+    else()
+        set(prefix "${arg_PREFIX}_")
+    endif()
+
+    set(feature_options)
+    set(feature_variables)
+
+    if(NOT DEFINED arg_FEATURES AND NOT DEFINED arg_INVERTED_FEATURES)
+        message(DEPRECATION
+"calling `vcpkg_check_features` without the `FEATURES` keyword has been deprecated.
+    Please add the `FEATURES` keyword to the call.")
+        set(arg_FEATURES "${arg_UNPARSED_ARGUMENTS}")
+    elseif(DEFINED arg_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "vcpkg_check_features called with unknown arguments: ${arg_UNPARSED_ARGUMENTS}")
+    endif()
+
+
+
+    z_vcpkg_check_features_last_feature(last_feature "FEATURES" "${arg_FEATURES}")
+    if(last_feature GREATER_EQUAL 0)
+        foreach(feature_pair_idx RANGE "${last_feature}")
+            z_vcpkg_check_features_get_feature("${feature_pair_idx}" "${arg_FEATURES}" feature_name feature_var)
+
+            list(APPEND feature_variables "${feature_var}")
+            if(feature_name IN_LIST FEATURES)
+                list(APPEND feature_options "-D${feature_var}=ON")
+                set("${prefix}${feature_var}" ON PARENT_SCOPE)
             else()
-                set(${_vcf_FEATURE_VAR} OFF PARENT_SCOPE)
-                list(APPEND _vcf_FEATURE_OPTIONS "-D${_vcf_FEATURE_VAR}=OFF")
+                list(APPEND feature_options "-D${feature_var}=OFF")
+                set("${prefix}${feature_var}" OFF PARENT_SCOPE)
             endif()
+        endforeach()
+    endif()
 
-            set(_vcf_IS_FEATURE_ARG ON)
+    z_vcpkg_check_features_last_feature(last_inverted_feature "INVERTED_FEATURES" "${arg_INVERTED_FEATURES}")
+    if(last_inverted_feature GREATER_EQUAL 0)
+        foreach(feature_pair_idx RANGE "${last_inverted_feature}")
+            z_vcpkg_check_features_get_feature("${feature_pair_idx}" "${arg_INVERTED_FEATURES}" feature_name feature_var)
+
+            list(APPEND feature_variables "${feature_var}")
+            if(feature_name IN_LIST FEATURES)
+                list(APPEND feature_options "-D${feature_var}=OFF")
+                set("${prefix}${feature_var}" OFF PARENT_SCOPE)
+            else()
+                list(APPEND feature_options "-D${feature_var}=ON")
+                set("${prefix}${feature_var}" ON PARENT_SCOPE)
+            endif()
+        endforeach()
+    endif()
+
+    list(SORT feature_variables)
+    set(last_variable)
+    foreach(variable IN LISTS feature_variables)
+        if(variable STREQUAL last_variable)
+            message("${Z_VCPKG_BACKCOMPAT_MESSAGE_LEVEL}" "vcpkg_check_features passed the same feature variable multiple times: '${variable}'")
         endif()
+        set(last_variable ${variable})
     endforeach()
 
-    if(DEFINED FEATURE_OPTIONS)
-        message(WARNING "FEATURE_OPTIONS is already defined and will be overwritten.")
-    endif()
-
-    set(FEATURE_OPTIONS ${_vcf_FEATURE_OPTIONS} PARENT_SCOPE)
+    set("${arg_OUT_FEATURE_OPTIONS}" "${feature_options}" PARENT_SCOPE)
 endfunction()

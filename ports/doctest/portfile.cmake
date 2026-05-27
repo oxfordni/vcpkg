@@ -1,26 +1,23 @@
-include(vcpkg_common_functions)
-
+# header-only library
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO onqtam/doctest
-    REF 2.3.3
-    SHA512 9ef94de93906f3c43918f232b3baa64756fdaee883afc5b2e785e76b108f1aa0d526a49dac58ffb0475ebfd8d8394ef266aec499c29282eea9a2752fb60b663f
+    REPO doctest/doctest
+    REF "v${VERSION}"
+    SHA512 9105552d3e6a1e21f6342cf3a3ed4521d1535336fbbd2243515092206746aa1da90a2e0df8043079b181114b63bac1f3f414e34e391a6815eba09e28802342de
     HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    DISABLE_PARALLEL_CONFIGURE
     OPTIONS
         -DDOCTEST_WITH_TESTS=OFF
 )
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/doctest)
+vcpkg_cmake_install()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/lib)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug)
-configure_file(${SOURCE_PATH}/LICENSE.txt ${CURRENT_PACKAGES_DIR}/share/doctest/copyright COPYONLY)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/${PORT})
 
-# CMake integration test
-vcpkg_test_cmake(PACKAGE_NAME ${PORT})
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")

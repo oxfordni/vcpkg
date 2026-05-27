@@ -1,103 +1,77 @@
-include(vcpkg_common_functions)
-
-set(MSVC_USE_STATIC_CRT_VALUE OFF)
-if(VCPKG_CRT_LINKAGE STREQUAL "static")
-    if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
-        message(FATAL_ERROR "Ceres does not currently support mixing static CRT and dynamic library linkage")
-    endif()
-    set(MSVC_USE_STATIC_CRT_VALUE ON)
-endif()
-
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(ADDITIONAL_PATCH "0004_blas_linux_fix.patch")
-endif()
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO ceres-solver/ceres-solver
-    REF 1.14.0
-    SHA512 6dddddf5bd5834332a69add468578ad527e4d94fe85c9751ddf5fe9ad11a34918bdd9c994c49dd6ffc398333d0ac9752ac89aaef1293e2fe0a55524e303d415d
+    REF 85331393dc0dff09f6fb9903ab0c4bfa3e134b01 #2.2.0
+    SHA512 16d3f4f3524b7532f666c0a626f1c678170698119eff3d914ade2e7cc65f25e644c2eabb618cd5805cba0fd4e08d3f64658a9f480934d8aace4089ec42b3d691
     HEAD_REF master
     PATCHES
         0001_cmakelists_fixes.patch
-        0002_use_glog_target.patch
-        0003_fix_exported_ceres_config.patch
-        ${ADDITIONAL_PATCH}
+        0004_remove_broken_fake_ba_jac.patch
+        0005_link_cuda_static.patch
+        0006_fix_cuda_architectures.patch
+        0007_support_cuda_13.patch
+        0008_support_eigen3_5.patch
+)
+file(REMOVE "${SOURCE_PATH}/cmake/FindGflags.cmake")
+file(REMOVE "${SOURCE_PATH}/cmake/FindGlog.cmake")
+file(REMOVE "${SOURCE_PATH}/cmake/FindEigen.cmake")
+file(REMOVE "${SOURCE_PATH}/cmake/FindMETIS.cmake")
+file(REMOVE "${SOURCE_PATH}/cmake/FindSuiteSparse.cmake")
+
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        "cuda"              USE_CUDA
+        "eigensparse"       EIGENSPARSE
+        "lapack"            LAPACK
+        "schur"             SCHUR_SPECIALIZATIONS
+        "suitesparse"       SUITESPARSE
 )
 
-file(REMOVE ${SOURCE_PATH}/cmake/FindGflags.cmake)
-file(REMOVE ${SOURCE_PATH}/cmake/FindGlog.cmake)
-#file(REMOVE ${SOURCE_PATH}/cmake/FindEigen.cmake)
-file(REMOVE ${SOURCE_PATH}/cmake/FindSuiteSparse.cmake)
-#file(REMOVE ${SOURCE_PATH}/cmake/FindTBB.cmake)
-
-set(SUITESPARSE OFF)
-if("suitesparse" IN_LIST FEATURES)
-    set(SUITESPARSE ON)
+if(VCPKG_TARGET_IS_IOS OR VCPKG_TARGET_IS_UWP)
+    list(APPEND FEATURE_OPTIONS -DMINIGLOG=ON)
 endif()
 
-set(CXSPARSE OFF)
-if("cxsparse" IN_LIST FEATURES)
-    set(CXSPARSE ON)
+if("cuda" IN_LIST FEATURES)
+    vcpkg_find_cuda(OUT_CUDA_TOOLKIT_ROOT cuda_toolkit_root)
+    list(APPEND FEATURE_OPTIONS
+        "-DCMAKE_CUDA_COMPILER=${NVCC}"
+        "-DCUDAToolkit_ROOT=${cuda_toolkit_root}"
+    )
 endif()
 
-set(LAPACK OFF)
-if("lapack" IN_LIST FEATURES)
-    set(LAPACK ON)
+if(VCPKG_TARGET_IS_IOS)
+    # Note: CMake uses "OSX" not just for macOS, but also iOS, watchOS and tvOS.
+    list(APPEND FEATURE_OPTIONS "-DIOS_DEPLOYMENT_TARGET=${VCPKG_OSX_DEPLOYMENT_TARGET}")
 endif()
 
-set(EIGENSPARSE OFF)
-if("eigensparse" IN_LIST FEATURES)
-    set(EIGENSPARSE ON)
+# Add big object support for MinGW
+if(VCPKG_TARGET_IS_MINGW)
+    list(APPEND FEATURE_OPTIONS "-DCMAKE_CXX_FLAGS=-Wa,-mbig-obj")
 endif()
 
-set(GFLAGS OFF)
-if("tools" IN_LIST FEATURES)
-    set(GFLAGS ON)
-endif()
-
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
+        ${FEATURE_OPTIONS}
         -DEXPORT_BUILD_DIR=ON
+        -DBUILD_BENCHMARKS=OFF
         -DBUILD_EXAMPLES=OFF
         -DBUILD_TESTING=OFF
-        -DGFLAGS=${GFLAGS}
-        -DCXSPARSE=${CXSPARSE}
-        -DEIGENSPARSE=${EIGENSPARSE}
-        -DLAPACK=${LAPACK}
-        -DSUITESPARSE=${SUITESPARSE}
+        -DPROVIDE_UNINSTALL_TARGET=OFF
         -DMSVC_USE_STATIC_CRT=${MSVC_USE_STATIC_CRT_VALUE}
+        -DVCPKG_LOCK_FIND_PACKAGE_CUDAToolkit=ON
+        -DVCPKG_LOCK_FIND_PACKAGE_gflags=OFF  # No direct use except examples+tests
+        -DVCPKG_LOCK_FIND_PACKAGE_LAPACK=ON
+    MAYBE_UNUSED_VARIABLES
+        MSVC_USE_STATIC_CRT
+        VCPKG_LOCK_FIND_PACKAGE_CUDAToolkit
+        VCPKG_LOCK_FIND_PACKAGE_LAPACK
 )
-
-vcpkg_install_cmake()
-
-if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-  vcpkg_fixup_cmake_targets(CONFIG_PATH CMake)
-else()
-  vcpkg_fixup_cmake_targets(CONFIG_PATH lib${LIB_SUFFIX}/cmake/Ceres)
-endif()
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/Ceres")
 
-# Changes target search path
-if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-  file(READ ${CURRENT_PACKAGES_DIR}/share/ceres/CeresConfig.cmake CERES_TARGETS)
-  string(REPLACE "get_filename_component(CURRENT_ROOT_INSTALL_DIR\n    \${CERES_CURRENT_CONFIG_DIR}/../"
-                 "get_filename_component(CURRENT_ROOT_INSTALL_DIR\n    \${CERES_CURRENT_CONFIG_DIR}/../../" CERES_TARGETS "${CERES_TARGETS}")
-  file(WRITE ${CURRENT_PACKAGES_DIR}/share/ceres/CeresConfig.cmake "${CERES_TARGETS}")
-else()
-  file(READ ${CURRENT_PACKAGES_DIR}/share/ceres/CeresConfig.cmake CERES_TARGETS)
-  string(REPLACE "get_filename_component(CURRENT_ROOT_INSTALL_DIR\n    \${CERES_CURRENT_CONFIG_DIR}/../../../"
-                 "get_filename_component(CURRENT_ROOT_INSTALL_DIR\n    \${CERES_CURRENT_CONFIG_DIR}/../../" CERES_TARGETS "${CERES_TARGETS}")
-  file(WRITE ${CURRENT_PACKAGES_DIR}/share/ceres/CeresConfig.cmake "${CERES_TARGETS}")
-endif()
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
-# Clean
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-
-# Handle copyright of suitesparse and metis
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/ceres)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/ceres/LICENSE ${CURRENT_PACKAGES_DIR}/share/ceres/copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

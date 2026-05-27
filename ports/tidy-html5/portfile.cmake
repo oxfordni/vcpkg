@@ -1,37 +1,34 @@
-include(vcpkg_common_functions)
-
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO htacg/tidy-html5
-    REF 5.6.0
-    SHA512 179088a6dbd29bb0e4f0219222f755b186145495f7414f6d0e178803ab67140391283d35352d946f9790c6b1b5b462ee6e24f1cc84f19391cb9b65e73979ffd1
+    REF 5.8.0
+    SHA512 f352165bdda5d1fca7bba3365560b64d6f70a4e010821cd246cde43bed5c23cea3408d461d3f889110fd35ec9b68aa2b4e95412b07775eb852b7ee1745007a44
     HEAD_REF master
     PATCHES
-        remove_execution_character_set.patch
+        disable-doc.patch
+        static-vs-shared.patch
+        debug-postfix.patch
+        fix_unsupport_func_uwp.patch
+        cmake_find_package_support.patch
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" BUILD_SHARED_LIB)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     NO_CHARSET_FLAG
     OPTIONS
-        -DBUILD_SHARED_LIB=OFF
-        -DTIDY_CONSOLE_SHARED=OFF
+        -DBUILD_SHARED_LIB=${BUILD_SHARED_LIB}
+        -DTIDY_CONSOLE_SHARED=${BUILD_SHARED_LIB}
+)
+vcpkg_cmake_install()
+vcpkg_fixup_pkgconfig()
+vcpkg_cmake_config_fixup(PACKAGE_NAME unofficial-tidy-html5 CONFIG_PATH lib/cmake/unofficial-tidy-html5)
+
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/bin/tidyd${VCPKG_TARGET_EXECUTABLE_SUFFIX}"
 )
 
-vcpkg_install_cmake()
+vcpkg_copy_tools(TOOL_NAMES tidy AUTO_CLEAN)
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE ${CURRENT_PACKAGES_DIR}/debug/bin/tidyd.exe)
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/tools/tidy-html5)
-file(RENAME ${CURRENT_PACKAGES_DIR}/bin/tidy.exe ${CURRENT_PACKAGES_DIR}/tools/tidy-html5/tidy.exe)
-
-if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
-endif()
-
-vcpkg_copy_tool_dependencies(${CURRENT_PACKAGES_DIR}/tools/${PORT})
-
-file(INSTALL ${SOURCE_PATH}/README/LICENSE.md DESTINATION ${CURRENT_PACKAGES_DIR}/share/tidy-html5 RENAME copyright)
+file(INSTALL "${SOURCE_PATH}/README/LICENSE.md" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

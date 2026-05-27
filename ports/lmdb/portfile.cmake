@@ -1,25 +1,44 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO LMDB/lmdb
-    REF LMDB_0.9.23
-    SHA512 47466a96ce288d18d489acf1abf811aa973649848a4cac31f71e1f25ea781a055ebd6616d2d630214b2df2f146f12609c82d65be0196f49d6b46a6c96464e120
+    REF "LMDB_${VERSION}"
+    SHA512 ef2e10eac846a723b44d365cbbeb539b6d9ed75db43e4509b3cbea819372b74c01ff65e728d8dc5eae3c0258bb57e0304334005fee5819a68325d32cd72ab633
     HEAD_REF master
-    PATCHES lmdb_45a88275d2a410e683bae4ef44881e0f55fa3c4d.patch
+    PATCHES
+        getopt-win32.diff
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/cmake/ DESTINATION ${SOURCE_PATH}/libraries/liblmdb)
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/cmake/" DESTINATION "${SOURCE_PATH}/libraries/liblmdb")
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}/libraries/liblmdb
+vcpkg_check_features(OUT_FEATURE_OPTIONS options_release
+    FEATURES
+        tools   LMDB_BUILD_TOOLS
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}/libraries/liblmdb"
+    OPTIONS
+        "-DLMDB_VERSION=${VERSION}"
+    OPTIONS_RELEASE
+        ${options_release}
     OPTIONS_DEBUG
         -DLMDB_INSTALL_HEADERS=OFF
 )
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets()
-
-file(INSTALL ${SOURCE_PATH}/libraries/liblmdb/COPYRIGHT DESTINATION ${CURRENT_PACKAGES_DIR}/share/lmdb RENAME copyright)
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup(PACKAGE_NAME unofficial-lmdb)
+
+if(LMDB_BUILD_TOOLS)
+    vcpkg_copy_tools(TOOL_NAMES mdb_copy mdb_dump mdb_load mdb_stat AUTO_CLEAN)
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+
+file(COPY "${CURRENT_PORT_DIR}/lmdb-config.cmake" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+file(COPY "${CURRENT_PORT_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(
+    FILE_LIST
+        "${SOURCE_PATH}/libraries/liblmdb/COPYRIGHT"
+        "${SOURCE_PATH}/libraries/liblmdb/LICENSE"
+)

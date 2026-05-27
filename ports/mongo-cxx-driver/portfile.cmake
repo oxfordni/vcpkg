@@ -1,112 +1,56 @@
-include(vcpkg_common_functions)
-
-set(VERSION_MAJOR 3)
-set(VERSION_MINOR 4)
-set(VERSION_PATCH 0)
-set(VERSION_FULL ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO mongodb/mongo-cxx-driver
-    REF r${VERSION_FULL}
-    SHA512 28c052904f1b456b92482097166238eae1ad50c3ed207496f09366b46f2c9465c7e98c7219f4f10314e4d8fdd01c36b70a2221891bb75231adcc1edf013d43ce
+    REF "r${VERSION}"
+    SHA512 21592fd610bb1e75b6a2c0bcf476044aa84a651d301d035f4e36e99ca0ada5b4609411e90569a913a685d2cdb7d669e702e9bdabdbdfeb99a19b0cf168637a12
     HEAD_REF master
     PATCHES
-        fix-uwp.patch
-        disable-c2338-mongo-cxx-driver.patch
-        disable_test_and_example.patch
+        fix-dependencies.patch
 )
 
-if ("mnmlstc" IN_LIST FEATURES)
-    set(BSONCXX_POLY MNMLSTC)
-elseif ("system-mnmlstc" IN_LIST FEATURES)
-    set(BSONCXX_POLY SYSTEM_MNMLSTC)
-elseif ("boost" IN_LIST FEATURES)
-    set(BSONCXX_POLY BOOST)
-elseif("std-experimental" IN_LIST FEATURES)
-    set(BSONCXX_POLY STD_EXPERIMENTAL)
-else()
-  if (NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    set(BSONCXX_POLY BOOST)
-  else()
-    set(BSONCXX_POLY MNMLSTC)
-  endif()
-endif()
+file(WRITE "${SOURCE_PATH}/build/VERSION_CURRENT" "${VERSION}")
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DLIBBSON_DIR=${CURRENT_INSTALLED_DIR}
-        -DLIBMONGOC_DIR=${CURRENT_INSTALLED_DIR}
-        -DMONGOCXX_HEADER_INSTALL_DIR=include
+        "-DCMAKE_PROJECT_MONGO_CXX_DRIVER_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/cmake-project-include.cmake"
         -DBSONCXX_HEADER_INSTALL_DIR=include
-        -DBSONCXX_POLY_USE_${BSONCXX_POLY}=1
+        -DENABLE_TESTS=OFF
+        -DENABLE_UNINSTALL=OFF
+        -DMONGOCXX_HEADER_INSTALL_DIR=include
+        -DNEED_DOWNLOAD_C_DRIVER=OFF
+    MAYBE_UNUSED_VARIABLES
+        BSONCXX_HEADER_INSTALL_DIR
+        MONGOCXX_HEADER_INSTALL_DIR
 )
+vcpkg_cmake_install()
+vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
 
-vcpkg_install_cmake()
-
-file(WRITE ${CURRENT_PACKAGES_DIR}/share/libbsoncxx/libbsoncxx-config.cmake
-"
-set(LIBBSONCXX_VERSION_MAJOR ${VERSION_MAJOR})
-set(LIBBSONCXX_VERSION_MINOR ${VERSION_MINOR})
-set(LIBBSONCXX_VERSION_PATCH ${VERSION_PATCH})
-set(LIBBSONCXX_PACKAGE_VERSION ${VERSION_FULL})
-
-get_filename_component(PACKAGE_PREFIX_DIR \"\${CMAKE_CURRENT_LIST_DIR}/../../\" ABSOLUTE)
-
-set(LIBBSONCXX_INCLUDE_DIRS \"\${PACKAGE_PREFIX_DIR}/include\")
-find_library(LIBBSONCXX_LIBRARY_PATH_RELEASE bsoncxx bsoncxx-static PATHS \"\${PACKAGE_PREFIX_DIR}/lib\" NO_DEFAULT_PATH)
-find_library(LIBBSONCXX_LIBRARY_PATH_DEBUG bsoncxx bsoncxx-static PATHS \"\${PACKAGE_PREFIX_DIR}/debug/lib\" NO_DEFAULT_PATH)
-set(LIBBSONCXX_LIBRARIES optimized \${LIBBSONCXX_LIBRARY_PATH_RELEASE} debug \${LIBBSONCXX_LIBRARY_PATH_DEBUG})
-"
-)
-file(WRITE ${CURRENT_PACKAGES_DIR}/share/libmongocxx/libmongocxx-config.cmake
-"
-set(LIBMONGOCXX_VERSION_MAJOR ${VERSION_MAJOR})
-set(LIBMONGOCXX_VERSION_MINOR ${VERSION_MINOR})
-set(LIBMONGOCXX_VERSION_PATCH ${VERSION_PATCH})
-set(LIBMONGOCXX_PACKAGE_VERSION ${VERSION_FULL})
-
-include(CMakeFindDependencyMacro)
-
-find_dependency(libbsoncxx)
-
-get_filename_component(PACKAGE_PREFIX_DIR \"\${CMAKE_CURRENT_LIST_DIR}/../../\" ABSOLUTE)
-
-set(LIBMONGOCXX_INCLUDE_DIRS \"\${PACKAGE_PREFIX_DIR}/include\" \${LIBBSONCXX_INCLUDE_DIRS})
-find_library(LIBMONGOCXX_LIBRARY_PATH_RELEASE NAMES mongocxx mongocxx-static PATHS \"\${PACKAGE_PREFIX_DIR}/lib\" NO_DEFAULT_PATH)
-find_library(LIBMONGOCXX_LIBRARY_PATH_DEBUG NAMES mongocxx mongocxx-static PATHS \"\${PACKAGE_PREFIX_DIR}/debug/lib\" NO_DEFAULT_PATH)
-set(LIBMONGOCXX_LIBRARIES optimized \${LIBMONGOCXX_LIBRARY_PATH_RELEASE} debug \${LIBMONGOCXX_LIBRARY_PATH_DEBUG} \${LIBBSONCXX_LIBRARIES})
-"
-)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/lib/cmake ${CURRENT_PACKAGES_DIR}/debug/lib/cmake)
-
-if (NOT BSONCXX_POLY STREQUAL MNMLSTC)
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/include/bsoncxx/third_party)
-endif()
+vcpkg_cmake_config_fixup(PACKAGE_NAME "bsoncxx" CONFIG_PATH "lib/cmake/bsoncxx-${VERSION}" DO_NOT_DELETE_PARENT_CONFIG_PATH)
+vcpkg_cmake_config_fixup(PACKAGE_NAME "mongocxx" CONFIG_PATH "lib/cmake/mongocxx-${VERSION}")
 
 file(REMOVE_RECURSE
-    ${CURRENT_PACKAGES_DIR}/include/bsoncxx/cmake
-    ${CURRENT_PACKAGES_DIR}/include/bsoncxx/config/private
-    ${CURRENT_PACKAGES_DIR}/include/bsoncxx/private
-    ${CURRENT_PACKAGES_DIR}/include/bsoncxx/test
-    ${CURRENT_PACKAGES_DIR}/include/bsoncxx/test_util
-
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/cmake
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/config/private
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/exception/private
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/options/private
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/gridfs/private
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/private
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/test
-    ${CURRENT_PACKAGES_DIR}/include/mongocxx/test_util
-
-    ${CURRENT_PACKAGES_DIR}/debug/include
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
 )
 
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/mongo-cxx-driver RENAME copyright)
-file(COPY ${SOURCE_PATH}/THIRD-PARTY-NOTICES DESTINATION ${CURRENT_PACKAGES_DIR}/share/mongo-cxx-driver)
+function(auto_clean dir)
+    file(GLOB entries "${dir}/*")
+    file(GLOB files LIST_DIRECTORIES false "${dir}/*")
+    foreach(entry IN LISTS entries)
+        if(entry IN_LIST files)
+            continue()
+        endif()
+        file(GLOB_RECURSE children "${entry}/*")
+        if(children)
+            auto_clean("${entry}")
+        else()
+            file(REMOVE_RECURSE "${entry}")
+        endif()
+    endforeach()
+endfunction()
+auto_clean("${CURRENT_PACKAGES_DIR}/include")
 
-vcpkg_copy_pdbs()
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

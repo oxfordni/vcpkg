@@ -1,23 +1,25 @@
-include(vcpkg_common_functions)
+set(VCPKG_BUILD_TYPE release) # header-only
+
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO jarro2783/cxxopts
-    REF v2.1.2
-    SHA512 7ee3725995d4d0f78b75d1d87f10290f20529ca4aa430eb8dd1c59d98c6e99c54b54fc545926b59f499d02ae4f75f9064b3b5ebbab3f74031d3638e7a2378440
+    REF "v${VERSION}"
+    SHA512 a22da1436a263d51aad2f542c2099f5b4fd1b02674716ff26d2f575786dcec4e97400edebf5577de95f3ae48c7c99be7be17d7a3de3e01a9f3612667e1547908
     HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DCXXOPTS_BUILD_EXAMPLES=OFF
+        -DCXXOPTS_BUILD_TESTS=OFF
+        -DCXXOPTS_ENABLE_WARNINGS=OFF
+        -DCXXOPTS_CMAKE_DIR=share/cxxopts
 )
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup()
+vcpkg_fixup_pkgconfig()
 
-vcpkg_install_cmake()
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/cxxopts)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/lib)
-
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/cxxopts RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

@@ -1,30 +1,36 @@
-#cmake-only scripts
-include(vcpkg_common_functions)
+# cmake-scripts only
+set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
+set(VCPKG_BUILD_TYPE release)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO KDE/extra-cmake-modules
-    REF v5.60.0
-    SHA512 98c7cbb0a84fbd4806cdf84538cb16717cbbb13fa5cce5c4bf9a507a699c579fa6f88af5091b3d311bdd504a119d6147114b2fad5de2dfd5f18448bca60cdc92
+    REF "v${VERSION}"
+    SHA512 b5169c07c3c1635beaee0e73263dd97065de788c2aec2d72aa35a9212355f03f4789e80a9ee79608e146139a6305facaaf1b693d2003b42c453a3d3593c78fd7
     HEAD_REF master
+    PATCHES
+        fix_generateqmltypes.patch # https://invent.kde.org/frameworks/extra-cmake-modules/-/merge_requests/201
+        fix-wrong-version.patch
+        # Adjust default installation dirs to vcpkg layout, reduce cross-platform variation
+        uniform-dataroot-dir.patch
+        uniform-libexec-dir.patch
+        uniform-plugin-dir.patch
+        # Avoid race while configuring downstream ports
+        kde-clang-format.diff
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    OPTIONS -DBUILD_HTML_DOCS=OFF
-            -DBUILD_MAN_DOCS=OFF
-            -DBUILD_QTHELP_DOCS=OFF
-            -DBUILD_TESTING=OFF
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DBUILD_HTML_DOCS=OFF
+        -DBUILD_MAN_DOCS=OFF
+        -DBUILD_QTHELP_DOCS=OFF
+        -DBUILD_TESTING=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH share/ECM/cmake)
 
-# Remove debug files
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug)
-
-# Handle copyright
-file(COPY ${SOURCE_PATH}/COPYING-CMAKE-SCRIPTS DESTINATION ${CURRENT_PACKAGES_DIR}/share/ecm)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/ecm/COPYING-CMAKE-SCRIPTS ${CURRENT_PACKAGES_DIR}/share/ecm/copyright)
-
-# Allow empty include directory
-set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)
+file(COPY "${CURRENT_PORT_DIR}/vcpkg-port-config.cmake" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+file(COPY "${CURRENT_PORT_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING-CMAKE-SCRIPTS")

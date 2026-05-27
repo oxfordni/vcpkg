@@ -1,36 +1,33 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO radarsat1/liblo
-    REF 0.30
-    SHA512 d36c141c513f869e6d1963bd0d584030038019b8be0b27bb9a684722b6e7a38e942ad2ee7c2e67ac13b965560937aad97259435ed86034aa2dc8cb92d23845d8
+    REF "${VERSION}"
+    SHA512 3757675f908f6bb7be3414c2708c4958fd1dd92f55d22f394902b51a27230524ff9dd6500f85229a53d1383b71e3bc09c74c011c1b6b988ebd777283c58b7227
     HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}/cmake
-    PREFER_NINJA # Disable this option if project cannot be built with Ninja
-    OPTIONS -DTHREADING=1
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}/cmake"
+    OPTIONS
+        -DTHREADING=ON
+        -DWITH_STATIC=ON
+        -DWITH_TESTS=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
 # Install needed files into package directory
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/liblo)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/liblo)
+vcpkg_fixup_pkgconfig()
 
-file(INSTALL ${CURRENT_PACKAGES_DIR}/bin/oscsend.exe DESTINATION ${CURRENT_PACKAGES_DIR}/tools/liblo)
-file(INSTALL ${CURRENT_PACKAGES_DIR}/bin/oscdump.exe DESTINATION ${CURRENT_PACKAGES_DIR}/tools/liblo)
-vcpkg_copy_tool_dependencies(${CURRENT_PACKAGES_DIR}/tools/liblo)
+vcpkg_copy_tools(TOOL_NAMES oscsend oscdump oscsendfile AUTO_CLEAN)
 
 # Remove unnecessary files
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE ${CURRENT_PACKAGES_DIR}/bin/oscsend.exe ${CURRENT_PACKAGES_DIR}/bin/oscdump.exe)
-file(REMOVE ${CURRENT_PACKAGES_DIR}/debug/bin/oscsend.exe ${CURRENT_PACKAGES_DIR}/debug/bin/oscdump.exe)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
 if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin" "${CURRENT_PACKAGES_DIR}/debug/bin")
 endif()
 
 # Handle copyright
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/liblo RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

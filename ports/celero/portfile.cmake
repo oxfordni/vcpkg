@@ -1,30 +1,31 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO DigitalInBlue/Celero
-    REF 6f24a1d98db4fee41ddd2f615cf490a5b514795a
-    SHA512 7dc8cecd2aac7bd312bfa01013f290fbfac8a43d07cc0d884e9b446c29a6c233e800f9bd3d03551f6e3b1ee2424cf90571f16590b23fc9333900fcc82143d048
+    REF "v${VERSION}"
+    SHA512 8b0043a93c4f8b45fbfc1886aa3cd0c00730413e36c806c7780031d6955553e963670a3f816fb0e64b76eb70d84b2b2fd02f1113ee88cc78b42af0e9dbae2406
     HEAD_REF master
+    PATCHES
+        fix-bin-install-path.patch
 )
 
 string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" CELERO_COMPILE_DYNAMIC_LIBRARIES)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA # Disable this option if project cannot be built with Ninja
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DCELERO_ENABLE_EXPERIMENTS=OFF
         -DCELERO_ENABLE_TESTS=OFF
-        -DCELERO_RUN_EXAMPLE_ON_BUILD=OFF
         -DCELERO_COMPILE_DYNAMIC_LIBRARIES=${CELERO_COMPILE_DYNAMIC_LIBRARIES}
+        -DCELERO_ENABLE_WARNINGS_AS_ERRORS=OFF
 )
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets(CONFIG_PATH share)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}")
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include ${CURRENT_PACKAGES_DIR}/debug/share)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/celero/celero-target.cmake ${CURRENT_PACKAGES_DIR}/share/celero/celero-config.cmake)
+if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/celero/Export.h" "#ifdef CELERO_STATIC" "#define CELERO_STATIC\n#ifdef CELERO_STATIC")
+endif()
 
-file(INSTALL ${SOURCE_PATH}/license.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/celero RENAME copyright)
+file(INSTALL "${SOURCE_PATH}/license.txt" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

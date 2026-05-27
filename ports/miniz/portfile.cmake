@@ -1,25 +1,29 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO richgel999/miniz
-    REF a4264837ae37384b1d7a205a6732db322f0f3769
-    SHA512 88f0e03cccfe66c796db7594b93c667bd52cd7f4d13803181e9d86b4aa26f214fd2907a45a752da603d3e87f8d53c40bfc0956b279c0d49016f7b943aeb9cd33
+    REF "${VERSION}"
+    SHA512 b2116d01161e6ba978541da3b1040338158a2da0d4559ae2817c1bd19a56472476b6984d438e7b8451aa0142d0405858342d719a76bd3bd6fd2df3ff6edc0700
     HEAD_REF master
-    PATCHES
-    	CMakeLists-targets.patch
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DBUILD_EXAMPLES=OFF
+        -DBUILD_FUZZERS=OFF
+        -DBUILD_TESTS=OFF
+        -DINSTALL_PROJECT=ON
+        -DCMAKE_POLICY_DEFAULT_CMP0057=NEW
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/miniz RENAME copyright)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/miniz)
+vcpkg_fixup_pkgconfig()
 
-vcpkg_test_cmake(PACKAGE_NAME miniz)
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

@@ -1,28 +1,27 @@
 # header-only library
 
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO QuantStack/xtl
-    REF 0.6.4
-    SHA512 92ff932634a88fee9bfd27d092ebdf91752d90be8a4f3fc41aef90c195718c989082e53f1fcfae9d67b153ecd29d3dde6f8e2b540eeec0db1d0d229a9b0d2fe8
+    REPO xtensor-stack/xtl
+    REF "${VERSION}"
+    SHA512 d7155d5fbaaeb54caf799823e2020f1bcbb6eaeaa2be3b22625f9056faf001847c6ef749bc14f68feccec924a1faf551f27c4ee7f6f33da5d2dcfbc112824069
     HEAD_REF master
+    PATCHES
+        fix-fixup-cmake.patch
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+set(VCPKG_BUILD_TYPE release)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DBUILD_TESTS=OFF
         -DDOWNLOAD_GTEST=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/${PORT})
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/xtl)
+vcpkg_fixup_pkgconfig()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-
-# Handle copyright
-configure_file(${SOURCE_PATH}/LICENSE ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

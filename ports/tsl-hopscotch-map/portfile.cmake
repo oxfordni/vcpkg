@@ -1,21 +1,20 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO Tessil/hopscotch-map
-    REF v2.2.1
-    SHA512 389fb09b6e47d8005d4a1b6c0db0c5f03de67686e9d4b97e473bf88f0c398d3118be0dcfdc5d509c082fd53f52f5d779d04c3d9bafe65c5eba11d03c62b60ddc
+    REF "v${VERSION}"
+    SHA512 22a2ea5089ef6ef7afb872f6785a1f1d063660a7cb22ccfd4ccbecf95fd0a71ffc72fbb814ac51be8ed7445e75d0d8b79e619d08d7ddf063968fe6e7bf995932
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH "share/cmake/${PORT}")
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug")
 
-file(INSTALL ${SOURCE_PATH}/LICENSE 
-     DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} 
+file(INSTALL "${SOURCE_PATH}/LICENSE"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
      RENAME copyright
 )

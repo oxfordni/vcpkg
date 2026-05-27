@@ -1,57 +1,47 @@
-include(vcpkg_common_functions)
-
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+
+vcpkg_download_distfile(APPLE_CLANG_FIX
+    URLS https://github.com/nmslib/nmslib/commit/91a6095e7843ccd51e5ac6a85622256224118535.diff?full_index=1
+    FILENAME nmslib-apple-clang-fix-91a6095e7843ccd51e5ac6a85622256224118535.diff
+    SHA512 d1a19f456b01e56178d68dd6539759c0ecc39f248992a441ac46257014200c066527d096e60fb386913a13125044683b773e107602c969e9e2cfdd446b012143
+)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO nmslib/nmslib
-    REF 1eda05dccd5ed34df50a243dfc64c5e9187388f8
-    SHA512 e4518c8dd84867bd0ac5dbc5d3b57d8053d1f73588fc0cf1d7c91cc4819f22dc7888d6be587691ebc1fd12b67de16de63b5e0a24847b6f7b49b57d1e6b457ebd
+    REF v2.1.1
+    SHA512 62BBB965EA4BF1D416ED78231B1BA4B41C0F46327D7BE16D1F98095DB63EF0E0D893B70040009711BC9C68555B1B8C4038F5032ABD66B759E955E2CBB0553EC3
     HEAD_REF master
-)
-
-vcpkg_apply_patches(
-    SOURCE_PATH ${SOURCE_PATH}
     PATCHES
-        ${CMAKE_CURRENT_LIST_DIR}/fix-headers.patch
-        ${CMAKE_CURRENT_LIST_DIR}/fix-cmake-order.patch
+        "${APPLE_CLANG_FIX}"
 )
 
-set(WITH_EXTRAS OFF)
-if("extra" IN_LIST FEATURES)
-    set(WITH_EXTRAS ON)
-endif()
-
-# TODO: check SSE and AVX avability and set corresponding tags
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}/similarity_search
-    OPTIONS
-        -DWITH_EXTRAS=${WITH_EXTRAS}
+# TODO: check SSE and AVX availability and set corresponding tags
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}/similarity_search"
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
 
 # Move headers into separate folder
 set(SUBFOLDERS factory method space)
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/include/nmslib)
-foreach(SUBFOLER ${SUBFOLDERS})
-    file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/include/nmslib/${SUBFOLER})
+file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/include/nmslib")
+foreach(SUBFOLDER ${SUBFOLDERS})
+    file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/include/nmslib/${SUBFOLDER}")
 endforeach()
 
-file(GLOB HEADERS ${CURRENT_PACKAGES_DIR}/include/*.h ${CURRENT_PACKAGES_DIR}/include/*/*.h)
+file(GLOB HEADERS "${CURRENT_PACKAGES_DIR}/include/*.h" "${CURRENT_PACKAGES_DIR}/include/*/*.h")
 foreach(HEADER ${HEADERS})
-    string(REPLACE "${CURRENT_PACKAGES_DIR}/include" "${CURRENT_PACKAGES_DIR}/include/nmslib"
-                   MOVED_HEADER ${HEADER})
-    file(RENAME ${HEADER} ${MOVED_HEADER})
+    string(REPLACE "${CURRENT_PACKAGES_DIR}/include" "${CURRENT_PACKAGES_DIR}/include/nmslib" MOVED_HEADER "${HEADER}")
+    file(RENAME "${HEADER}" "${MOVED_HEADER}")
 endforeach(HEADER ${HEADERS})
 
-foreach(SUBFOLER ${SUBFOLDERS})
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/include/${SUBFOLER}/)
+foreach(SUBFOLDER ${SUBFOLDERS})
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/include/${SUBFOLDER}/")
 endforeach()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
 # Put the license file where vcpkg expects it
-file(COPY ${SOURCE_PATH}/README.md DESTINATION ${CURRENT_PACKAGES_DIR}/share/nmslib/)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/nmslib/README.md ${CURRENT_PACKAGES_DIR}/share/nmslib/copyright)
+file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

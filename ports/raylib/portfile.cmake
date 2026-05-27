@@ -1,9 +1,4 @@
-# https://github.com/raysan5/raylib/issues/388
-if(TARGET_TRIPLET MATCHES "^arm" OR TARGET_TRIPLET MATCHES "uwp$")
-    message(FATAL_ERROR "raylib doesn't support ARM or UWP.")
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(VCPKG_TARGET_IS_LINUX)
     message(
     "raylib currently requires the following libraries from the system package manager:
     libgl1-mesa-dev
@@ -15,75 +10,87 @@ These can be installed on Ubuntu systems via sudo apt install libgl1-mesa-dev li
     )
 endif()
 
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO raysan5/raylib
-    REF f37e55a77bd6177dbaea4d7f484961c09104e104
-    SHA512 57146ebc7ab22a4e60c1d9eecd4c7a8f1930d6709f45761af809da9ea4f161e9fd450fa1042252a80bd7952ed9571a5d8dee4d454c8903a778e3e1328300b2bd
+    REF "${VERSION}"
+    SHA512 dfdb2578859e28d424b6f318669579ab2361c35c4d45e0fee5a80b4c1d7d487a0e084ec2bafffad149b3dd96d34d092586fc3d30c8de6a211b0a2a038a959c07
     HEAD_REF master
+    PATCHES
+        android.diff
+        # Once the next version of cgltf is released, this patch will no longer be necessary.
+        fix-cgltf.patch
 )
+file(GLOB vendored_headers RELATIVE "${SOURCE_PATH}/src/external"
+    "${SOURCE_PATH}/src/external/cgltf.h"
+    # Do not use dirent from vcpkg: It is a different implementation which has
+    # 'include <windows.h>', leading to duplicate and conflicting definitions.
+    #"${SOURCE_PATH}/src/external/dirent.h"
+    "${SOURCE_PATH}/src/external/nanosvg*.h"
+    "${SOURCE_PATH}/src/external/qoi.h"
+    "${SOURCE_PATH}/src/external/s*fl.h"  # from mmx
+    "${SOURCE_PATH}/src/external/stb_*"
+)
+file(GLOB vendored_audio_headers RELATIVE "${SOURCE_PATH}/src/external"
+    "${SOURCE_PATH}/src/external/dr_*.h"
+    "${SOURCE_PATH}/src/external/miniaudio.h"
+)
+set(optional_vendored_headers
+    "stb_image_resize2.h"  # not yet in vcpkg
+)
+foreach(header IN LISTS vendored_headers vendored_audio_headers)
+    unset(vcpkg_file)
+    find_file(vcpkg_file NAMES "${header}" PATHS "${CURRENT_INSTALLED_DIR}/include" PATH_SUFFIXES mmx nanosvg NO_DEFAULT_PATH NO_CACHE)
+    if(header IN_LIST vendored_audio_headers AND NOT "audio" IN_LIST FEATURES)
+        message(STATUS "Emptying '${header}' (audio disabled)")
+        file(WRITE "${SOURCE_PATH}/src/external/${vcpkg_file}" "# audio disabled")
+    elseif(vcpkg_file)
+        message(STATUS "De-vendoring '${header}'")
+        file(COPY "${vcpkg_file}" DESTINATION "${SOURCE_PATH}/src/external")
+    elseif(header IN_LIST optional_vendored_headers)
+        message(STATUS "Not de-vendoring '${header}' (absent in vcpkg)")
+    else()
+        message(FATAL_ERROR "No replacement for vendored '${header}'")
+    endif()
+endforeach()
 
-string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" SHARED)
-string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" STATIC)
-
-if("non-audio" IN_LIST FEATURES)
-    set(USE_AUDIO OFF)
+set(PLATFORM_OPTIONS "")
+if(VCPKG_TARGET_IS_ANDROID)
+    list(APPEND PLATFORM_OPTIONS -DPLATFORM=Android -DUSE_EXTERNAL_GLFW=OFF)
+elseif(VCPKG_TARGET_IS_EMSCRIPTEN)
+    list(APPEND PLATFORM_OPTIONS -DPLATFORM=Web -DUSE_EXTERNAL_GLFW=OFF)
 else()
-    set(USE_AUDIO ON)
+    list(APPEND PLATFORM_OPTIONS -DPLATFORM=Desktop -DUSE_EXTERNAL_GLFW=ON)
 endif()
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        audio SUPPORT_MODULE_RAUDIO
+        audio USE_AUDIO
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DBUILD_EXAMPLES=OFF
-        -DBUILD_GAMES=OFF
-        -DSHARED=${SHARED}
-        -DSTATIC=${STATIC}
-        -DUSE_AUDIO=${USE_AUDIO}
-        -DUSE_EXTERNAL_GLFW=OFF # externl glfw3 causes build errors on Windows
-    OPTIONS_DEBUG
-        -DENABLE_ASAN=ON
-        -DENABLE_UBSAN=ON
-        -DENABLE_MSAN=OFF
-    OPTIONS_RELEASE
-        -DENABLE_ASAN=OFF
-        -DENABLE_UBSAN=OFF
-        -DENABLE_MSAN=OFF
+        -DCMAKE_POLICY_DEFAULT_CMP0072=NEW # Prefer GLVND
+        -DCUSTOMIZE_BUILD=ON
+        ${PLATFORM_OPTIONS}
+        ${FEATURE_OPTIONS}
 )
 
-vcpkg_install_cmake()
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
-
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/${PORT})
-
-configure_file(
-    ${CMAKE_CURRENT_LIST_DIR}/vcpkg-cmake-wrapper.cmake
-    ${CURRENT_PACKAGES_DIR}/share/${PORT}/vcpkg-cmake-wrapper.cmake
-    @ONLY
-)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/${PORT})
+vcpkg_fixup_pkgconfig()
 
 file(REMOVE_RECURSE
-    ${CURRENT_PACKAGES_DIR}/debug/include
-    ${CURRENT_PACKAGES_DIR}/debug/share
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
 )
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL dynamic)
-    vcpkg_replace_string(
-        ${CURRENT_PACKAGES_DIR}/include/raylib.h
-        "defined(USE_LIBTYPE_SHARED)"
-        "1 // defined(USE_LIBTYPE_SHARED)"
-    )
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/raylib.h" "defined(USE_LIBTYPE_SHARED)" "1")
 endif()
 
-# Install usage
-configure_file(${CMAKE_CURRENT_LIST_DIR}/usage ${CURRENT_PACKAGES_DIR}/share/${PORT}/usage @ONLY)
-
-# Handle copyright
-configure_file(${SOURCE_PATH}/LICENSE.md ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
-
-# CMake integration test
-#vcpkg_test_cmake(PACKAGE_NAME ${PORT})
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

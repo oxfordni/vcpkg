@@ -1,76 +1,141 @@
-include(vcpkg_common_functions)
+set(PATCHES
+    fix-dependencies.patch
+    fix-static-ffmpeg.patch
+    imath-version-guard.patch
+    fix-openimageio_include_dir.patch
+    fix-openexr-target-missing.patch
+)
+
+if(VCPKG_TARGET_IS_OSX)
+    execute_process(COMMAND xcrun --show-sdk-version
+            OUTPUT_VARIABLE OSX_SDK_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    # macOS 26 Tahoe has removed AGL APIs https://bugreports.qt.io/browse/QTBUG-137687
+    #
+    # macOS 26.2 fails to query this with the following error, so we conservatively apply the patch in that case
+    # xcodebuild: error: SDK "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk" cannot be located.
+    # xcrun: error: unable to lookup item 'SDKVersion' in SDK '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk'
+    if(NOT OSX_SDK_VERSION OR OSX_SDK_VERSION VERSION_GREATER_EQUAL 26)
+        list(APPEND PATCHES remove-agl-framework.patch)
+    endif()
+endif()
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO OpenImageIO/oiio
-    REF Release-2.0.8
-    SHA512 412d240916780b784b89d9eeb36b5b9451e8448100fce494c0d95f0b274506d2946cae0eb929dbe8118b8b04a8bd2a926270a971aad7d0542abcff5f35404953
+    REPO AcademySoftwareFoundation/OpenImageIO
+    REF "v${VERSION}"
+    SHA512 d00877c1bca8c5ca19e4534787783a12c892215403282425d1685920b5f424b6fac217f049243c2106e5d981c7508115145e08ce5c5dd78633073c1ddd883f3e
     HEAD_REF master
-    PATCHES
-        fix_libraw.patch
-        use-webp.patch
-        remove_wrong_dependency.patch
+    PATCHES ${PATCHES}
 )
 
 file(REMOVE_RECURSE "${SOURCE_PATH}/ext")
-file(MAKE_DIRECTORY "${SOURCE_PATH}/ext/robin-map/tsl")
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    set(BUILDSTATIC ON)
-    set(LINKSTATIC ON)
-else()
-    set(BUILDSTATIC OFF)
-    set(LINKSTATIC OFF)
-endif()
-
-# Features
-set(USE_LIBRAW OFF)
-if("libraw" IN_LIST FEATURES)
-    set(USE_LIBRAW ON)
-endif()
-
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DOIIO_BUILD_TOOLS=OFF
-        -DOIIO_BUILD_TESTS=OFF
-        -DHIDE_SYMBOLS=ON
-        -DUSE_DICOM=OFF
-        -DUSE_FFMPEG=OFF
-        -DUSE_FIELD3D=OFF
-        -DUSE_FREETYPE=OFF
-        -DUSE_GIF=OFF
-        -DUSE_LIBRAW=${USE_LIBRAW}
-        -DUSE_NUKE=OFF
-        -DUSE_OCIO=OFF
-        -DUSE_OPENCV=OFF
-        -DUSE_OPENJPEG=OFF
-        -DUSE_OPENSSL=OFF
-        -DUSE_PTEX=OFF
-        -DUSE_PYTHON=OFF
-        -DUSE_QT=OFF
-        -DUSE_WEBP=OFF
-        -DBUILDSTATIC=${BUILDSTATIC}
-        -DLINKSTATIC=${LINKSTATIC}
-        -DBUILD_MISSING_PYBIND11=OFF
-        -DBUILD_MISSING_DEPS=OFF
-        -DCMAKE_DISABLE_FIND_PACKAGE_Git=ON
-        -DVERBOSE=ON
-    OPTIONS_DEBUG
-        -DOPENEXR_CUSTOM_LIB_DIR=${CURRENT_INSTALLED_DIR}/debug/lib
+file(REMOVE
+    "${SOURCE_PATH}/src/cmake/modules/FindFFmpeg.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindLibheif.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindLibRaw.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindLibsquish.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindOpenCV.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindOpenJPEG.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindWebP.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/Findfmt.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindTBB.cmake"
+    "${SOURCE_PATH}/src/cmake/modules/FindJXL.cmake"
 )
 
-vcpkg_install_cmake()
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        libraw      USE_LIBRAW
+        opencolorio USE_OPENCOLORIO
+        ffmpeg      USE_FFMPEG
+        freetype    USE_FREETYPE
+        gif         USE_GIF
+        jpegxl      USE_JXL
+        opencv      USE_OPENCV
+        openjpeg    USE_OPENJPEG
+        webp        USE_WEBP
+        libheif     USE_LIBHEIF
+        pybind11    USE_PYTHON
+        tools       OIIO_BUILD_TOOLS
+        viewer      ENABLE_IV
+)
+
+if("pybind11" IN_LIST FEATURES)
+    vcpkg_get_vcpkg_installed_python(PYTHON3)
+    list(APPEND FEATURE_OPTIONS "-DPython3_EXECUTABLE=${PYTHON3}")
+endif()
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DBUILD_TESTING=OFF
+        -DOIIO_BUILD_TESTS=OFF
+        -DUSE_DCMTK=OFF
+        -DUSE_NUKE=OFF
+        -DUSE_OpenVDB=OFF
+        -DUSE_PTEX=OFF
+        -DUSE_TBB=OFF
+        -DLINKSTATIC=OFF # LINKSTATIC breaks library lookup
+        -DBUILD_MISSING_FMT=OFF
+        -DOIIO_INTERNALIZE_FMT=OFF  # carry fmt's msvc utf8 usage requirements
+        -DBUILD_MISSING_ROBINMAP=OFF
+        -DBUILD_MISSING_DEPS=OFF
+        -DSTOP_ON_WARNING=OFF
+        -DVERBOSE=ON
+        -DBUILD_DOCS=OFF
+        -DINSTALL_DOCS=OFF
+        -DENABLE_INSTALL_testtex=OFF
+        "-DFMT_INCLUDES=${CURRENT_INSTALLED_DIR}/include"
+        "-DREQUIRED_DEPS=fmt;JPEG;PNG;Robinmap"
+    MAYBE_UNUSED_VARIABLES
+        ENABLE_INSTALL_testtex
+        ENABLE_IV
+        BUILD_MISSING_DEPS
+        BUILD_MISSING_FMT
+        BUILD_MISSING_ROBINMAP
+        REQUIRED_DEPS
+)
+
+vcpkg_cmake_install()
 
 vcpkg_copy_pdbs()
 
-# Clean
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/doc)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/doc)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/OpenImageIO)
 
-# Handle copyright
-file(COPY ${SOURCE_PATH}/LICENSE.md DESTINATION ${CURRENT_PACKAGES_DIR}/share/openimageio)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/openimageio/LICENSE.md ${CURRENT_PACKAGES_DIR}/share/openimageio/copyright)
+if("tools" IN_LIST FEATURES)
+    vcpkg_copy_tools(
+        TOOL_NAMES iconvert idiff igrep iinfo maketx oiiotool
+        AUTO_CLEAN
+    )
+endif()
+
+if("viewer" IN_LIST FEATURES)
+    vcpkg_copy_tools(
+        TOOL_NAMES iv
+        AUTO_CLEAN
+    )
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/share/doc"
+                    "${CURRENT_PACKAGES_DIR}/debug/include"
+                    "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_fixup_pkgconfig()
+
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/OpenImageIO/export.h" "ifdef OIIO_STATIC_DEFINE" "if 1")
+endif()
+
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.md")
+file(READ "${SOURCE_PATH}/THIRD-PARTY.md" third_party)
+string(REGEX REPLACE
+    "^.*The remainder of this file"
+    "\n-------------------------------------------------------------------------\n\nThe remainder of this file"
+    third_party
+    "${third_party}"
+)
+file(APPEND "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright" "${third_party}")

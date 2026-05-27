@@ -1,38 +1,44 @@
 #header-only library
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO Tencent/rapidjson
-    REF d87b698d0fcc10a5f632ecbc80a9cb2a8fa094a5
-    SHA512 1770668c954e1bfa40da3956ccf2252703d2addb058bb8c0bf579abac585262452d0e15dcfed9ac2fa358c0da305d706226fdab8310b584017aba98e4f31db4f
+    REF 24b5e7a8b27f42fa16b96fc70aade9106cf7102f # accessed on 2025-02-26
+    SHA512 50f8723414a6e63eadd45f97be5c44e9fff2d06216c8cc4df802f5bfc2a9416a039f2c69e9bb1882f7e756cd38a7097eea05cab76c739f45805dc41617140799
+    FILE_DISAMBIGUATOR 2
     HEAD_REF master
-    PATCHES arm64-endian.patch
 )
 
 # Use RapidJSON's own build process, skipping examples and tests
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DRAPIDJSON_BUILD_DOC:BOOL=OFF
-        -DRAPIDJSON_BUILD_EXAMPLES:BOOL=OFF
-        -DRAPIDJSON_BUILD_TESTS:BOOL=OFF
-        -DCMAKE_INSTALL_DIR:STRING=cmake
+        -DRAPIDJSON_BUILD_DOC=OFF
+        -DRAPIDJSON_BUILD_EXAMPLES=OFF
+        -DRAPIDJSON_BUILD_TESTS=OFF
 )
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-# Move CMake config files to the right place
-vcpkg_fixup_cmake_targets(CONFIG_PATH cmake)
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_cmake_config_fixup(CONFIG_PATH cmake)
+else()
+    vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/RapidJSON)
+endif()
 
-# Delete redundant directories
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/lib ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/share/doc)
+vcpkg_fixup_pkgconfig()
 
-# Put the licence file where vcpkg expects it
-file(COPY ${SOURCE_PATH}/license.txt ${CMAKE_CURRENT_LIST_DIR}/usage DESTINATION ${CURRENT_PACKAGES_DIR}/share/rapidjson)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/rapidjson/license.txt ${CURRENT_PACKAGES_DIR}/share/rapidjson/copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/share/doc")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include" "${CURRENT_PACKAGES_DIR}/debug/share")
 
-file(READ "${CURRENT_PACKAGES_DIR}/share/rapidjson/RapidJSONConfig.cmake" _contents)
+if(VCPKG_TARGET_IS_WINDOWS)
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
+endif()
+
+file(READ "${CURRENT_PACKAGES_DIR}/share/${PORT}/RapidJSONConfig.cmake" _contents)
+string(REPLACE "VERSION 3.0" "VERSION 3.5...3.30" _contents "${_contents}")
 string(REPLACE "\${RapidJSON_SOURCE_DIR}" "\${RapidJSON_CMAKE_DIR}/../.." _contents "${_contents}")
-file(WRITE "${CURRENT_PACKAGES_DIR}/share/rapidjson/RapidJSONConfig.cmake" "${_contents}\nset(RAPIDJSON_INCLUDE_DIRS \"\${RapidJSON_INCLUDE_DIRS}\")\n")
-# Note: adding this extra setting for RAPIDJSON_INCLUDE_DIRS maintains compatibility with previous rapidjson versions
+string(REPLACE "set( RapidJSON_SOURCE_DIR \"${SOURCE_PATH}\")" "" _contents "${_contents}")
+string(REPLACE "set( RapidJSON_DIR \"${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel\")" "" _contents "${_contents}")
+string(REPLACE "\${RapidJSON_CMAKE_DIR}/../../../include" "\${RapidJSON_CMAKE_DIR}/../../include" _contents "${_contents}")
+file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/RapidJSONConfig.cmake" "${_contents}\nset(RAPIDJSON_INCLUDE_DIRS \"\${RapidJSON_INCLUDE_DIRS}\")\n")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/license.txt")

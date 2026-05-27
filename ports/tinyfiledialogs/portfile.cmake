@@ -1,34 +1,44 @@
-include(vcpkg_common_functions)
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+endif()
 
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
-
-set(SHA 21998464c84ddaa9f911d8d05378d6f23a3a3671)
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/${SHA})
-
-vcpkg_download_distfile(HEADERFILE
-    URLS "https://sourceforge.net/p/tinyfiledialogs/code/ci/${SHA}/tree/tinyfiledialogs.h?format=raw"
-    FILENAME "tinyfiledialogs-h-${SHA}"
-    SHA512 3f15192e2e2ba674308330eca88f5f2430980b93a53389125fab4de0fce775b9a0e2a0464a3a69bd86e362715c866504e752bfea402f1072005f6da3c97316d8
+# git: not cachable
+# tinyfiledialogs-current.zip: changing SHA512
+# last resort: explicit source files
+# Reviewers may compare git and zip sources at the time of the port update.
+set(ref fe637654492cb8257cb68a8025dfc09ce3e0f490)
+string(SUBSTRING "${ref}" 0 7 short_ref)
+vcpkg_download_distfile(tinyfiledialogs_c_file
+    URLS "https://sourceforge.net/p/tinyfiledialogs/code/ci/${ref}/tree/tinyfiledialogs.c?format=raw"
+    FILENAME "tinyfiledialogs-${short_ref}.c"
+    SHA512 8cd199ddb3320a8096f9d5ad4bdab45e982a189fe94e96a978ed88ef7c4ead5c69863565088b0ff1c446fca93bcbde95e206d1b4cd3f5f7fd84ffcf2011fc9d1
 )
-vcpkg_download_distfile(SOURCEFILE
-    URLS "https://sourceforge.net/p/tinyfiledialogs/code/ci/${SHA}/tree/tinyfiledialogs.c?format=raw"
-    FILENAME "tinyfiledialogs-c-${SHA}"
-    SHA512 b03260ba84872b3cf4eae2fed3a1770480021e3d4109f5ef243a433da48e443b7f244b105a16ce9d5655e086774d9098628e56b1559a6862fb5add547210ca58
+vcpkg_download_distfile(tinyfiledialogs_h_file
+    URLS "https://sourceforge.net/p/tinyfiledialogs/code/ci/${ref}/tree/tinyfiledialogs.h?format=raw"
+    FILENAME "tinyfiledialogs-${short_ref}.h"
+    SHA512 8deaf823a5f6e9ec85e958f15a0e6d29957ed48748624bb52abce32ba55c26dbf186b09a6c0048439f27f5bae390fd2fee03757756a1ea172dbb28735293bb8f
 )
 
-configure_file(${HEADERFILE} ${SOURCE_PATH}/tinyfiledialogs.h COPYONLY)
-configure_file(${SOURCEFILE} ${SOURCE_PATH}/tinyfiledialogs.c COPYONLY)
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
+file(READ "${tinyfiledialogs_c_file}" c_source)
+if(NOT c_source MATCHES "tinyfd_version.8. = \"([^\"]*)\"" OR NOT CMAKE_MATCH_1 STREQUAL VERSION)
+    message(FATAL_ERROR "Source doesn't declare match version ${VERSION}.")
+elseif(NOT c_source MATCHES [[- License -[\r\n]*(.*)]])
+    message(FATAL_ERROR "Failed to parse license from tinyfiledialogs.c")
+endif()
+string(REGEX REPLACE " *__*.*" "" license "${CMAKE_MATCH_1}")
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+set(source_path "${CURRENT_BUILDTREES_DIR}/src/${short_ref}")
+file(MAKE_DIRECTORY "${source_path}")
+file(COPY_FILE "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" "${source_path}/CMakeLists.txt")
+file(COPY_FILE "${tinyfiledialogs_c_file}" "${source_path}/tinyfiledialogs.c")
+file(COPY_FILE "${tinyfiledialogs_h_file}" "${source_path}/tinyfiledialogs.h")
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${source_path}"
 )
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup()
 
-vcpkg_fixup_cmake_targets()
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-file(READ ${HEADERFILE} _contents)
-string(SUBSTRING "${_contents}" 0 1024 _contents)
-file(WRITE ${CURRENT_PACKAGES_DIR}/share/tinyfiledialogs/copyright "${_contents}")
+file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright" "${license}")

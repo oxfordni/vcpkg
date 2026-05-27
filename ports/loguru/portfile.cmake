@@ -1,12 +1,32 @@
-include(vcpkg_common_functions)
-
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+endif()
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO emilk/loguru
-    REF v2.0.0
-    SHA512 d6358f843689d10a44dc7bf590305cbfb89727e26d971ca4fe439e5468cdb7bcee2aa858368250e9654fb5ecebf63bca9742451881dae78068fecb18f279d988
+    REF 4adaa185883e3c04da25913579c451d3c32cfac1  #v2.1.0
+    SHA512 813c9f9171a828a40270a3ad9f98124586eb56d37f263d55cd1ea6ac997d64431e2ae846f3dc0b477f8bf30873270c53b4bd7e6b6fc52259d2fd36126b24bbe6
     HEAD_REF master
 )
 
-file(INSTALL ${SOURCE_PATH}/loguru.hpp  DESTINATION ${CURRENT_PACKAGES_DIR}/include/loguru)
-file(COPY ${CURRENT_PORT_DIR}/copyright DESTINATION ${CURRENT_PACKAGES_DIR}/share/loguru)
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        fmt LOGURU_USE_FMTLIB
+        stream LOGURU_WITH_STREAMS
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+ )
+
+vcpkg_cmake_install()
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/loguru")
+vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
+
+
+vcpkg_install_copyright(FILE_LIST "${CMAKE_CURRENT_LIST_DIR}/copyright")

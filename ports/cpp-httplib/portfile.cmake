@@ -1,23 +1,37 @@
-include(vcpkg_common_functions)
-
-set(VERSION 0.2.0)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO yhirose/cpp-httplib
-    REF 2f8479016fa9af9a63056571992b31c32741d89b
-    SHA512 2f17a6a95c849a5c873a65e8da8bf85311f0152e439a973354c24d02ee9e6c3b0f3a456b60f90637ea4588d9ac09f7e41f42199de61315754e5fe9eecbb657ed
+    REF "v${VERSION}"
+    SHA512 65b770da7dd22f672ddae849f42c9fdb545e000004f825c3776fe29512ca12a47f78c72f9934c4562f4168ce37081ec40f5fb25de797e7fb99e70cb5946e12d4
     HEAD_REF master
+    PATCHES
+        fix-find-brotli.patch
 )
 
-file(
-    COPY ${SOURCE_PATH}/httplib.h
-    DESTINATION ${CURRENT_PACKAGES_DIR}/include
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        brotli  HTTPLIB_REQUIRE_BROTLI
+        openssl HTTPLIB_REQUIRE_OPENSSL
+        zlib    HTTPLIB_REQUIRE_ZLIB
+        zstd    HTTPLIB_REQUIRE_ZSTD
 )
 
-# Handle copyright
-configure_file(
-    ${SOURCE_PATH}/LICENSE
-    ${CURRENT_PACKAGES_DIR}/share/cpp-httplib/copyright
-    COPYONLY
+set(VCPKG_BUILD_TYPE release) # header-only port
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+    ${FEATURE_OPTIONS}
+    -DHTTPLIB_USE_OPENSSL_IF_AVAILABLE=OFF
+    -DHTTPLIB_USE_ZLIB_IF_AVAILABLE=OFF
+    -DHTTPLIB_USE_BROTLI_IF_AVAILABLE=OFF
+    -DHTTPLIB_USE_ZSTD_IF_AVAILABLE=OFF
 )
+
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(PACKAGE_NAME httplib CONFIG_PATH lib/cmake/httplib)
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")

@@ -1,21 +1,27 @@
-include(vcpkg_common_functions)
+set(VCPKG_BUILD_TYPE release) # header-only
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO mlpack/ensmallen
-    REF 8bea8d214b40be3cb42e817328c0791541fbcd6c
-    SHA512 b075b763c136c1d2d5088c533a8557e3d425da7bcfeb3748063c1e3225e58969eddfc5bd786cb02f29f71ea5e3288327481a0961f64b1d2ff1251a0f59c07779
+    REF "${VERSION}"
+    SHA512 1e86fc28a58694057262a8d036af8080be084c889f7b659b77a08fd4e0957d0f03d8866e47b682a1868b5ac2198cca85c591a334b284096659a123196de95a66
     HEAD_REF master
-	PATCHES
-		disable_tests.patch
+    PATCHES
+        dependencies.patch
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        openmp     USE_OPENMP
 )
-vcpkg_install_cmake()
 
-file(INSTALL ${SOURCE_PATH}/COPYRIGHT.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/ensmallen RENAME copyright)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS ${FEATURE_OPTIONS}
+)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/ensmallen)
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYRIGHT.txt")

@@ -1,36 +1,44 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO BlueBrain/HighFive
-    REF v2.0
-    SHA512 d6bc38ae421adfa3cb9ee761ec92819bebe385cb100a8227bd9ff436cd7ae31725a96264a7963cfe5ce806cdd3b7978a8a630e9312c1567f6df6029062c6b8a0
+    REPO highfive-devs/highfive
+    REF "v${VERSION}"
+    SHA512 b7c4eeec0670ba7d8c3b6c69e85abaae1a9b1237eea4f5fb873d8730633c5e785a73d80ee29e64e57afea83e4c52e8a0779c8564edd484069127965a8d3bddb3
     HEAD_REF master
 )
 
-if(${VCPKG_LIBRARY_LINKAGE} MATCHES "static")
-    set(HDF5_USE_STATIC_LIBRARIES ON)
-endif()
-
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DHIGHFIVE_UNIT_TESTS=OFF
-        -DHIGHFIVE_EXAMPLES=OFF
-        -DUSE_BOOST=OFF
-        -DHIGH_FIVE_DOCUMENTATION=OFF
-        -DHDF5_USE_STATIC_LIBRARIES=${HDF5_USE_STATIC_LIBRARIES}
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        boost       HIGHFIVE_TEST_BOOST
+        opencv      HIGHFIVE_TEST_OPENCV
+        xtensor     HIGHFIVE_TEST_XTENSOR
+        eigen3      HIGHFIVE_TEST_EIGEN
 )
 
-vcpkg_install_cmake()
-
-vcpkg_fixup_cmake_targets(CONFIG_PATH share/HighFive/CMake)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug)
-if(NOT (NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore") AND NOT VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/share/HighFive)
+if(HDF5_WITH_PARALLEL)
+    message(STATUS "${HDF5_WITH_PARALLEL} Enabling HIGHFIVE_PARALLEL_HDF5.")
+    list(APPEND FEATURE_OPTIONS "-DHIGHFIVE_PARALLEL_HDF5=ON")
 endif()
 
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/highfive RENAME copyright)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    DISABLE_PARALLEL_CONFIGURE
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DHIGHFIVE_UNIT_TESTS=OFF
+        -DHIGHFIVE_EXAMPLES=OFF
+        -DHIGHFIVE_BUILD_DOCS=OFF
+)
+
+vcpkg_cmake_install()
+
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/HighFive)
+if(NOT EXISTS "${CURRENT_PACKAGES_DIR}/share/HighFive/HighFiveConfig.cmake")
+    # left over with mixed case
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/share/HighFive")
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
+
+file(INSTALL "${CURRENT_PORT_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

@@ -1,35 +1,31 @@
-# header-only library
-
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO QuantStack/xsimd
-    REF 7.2.3
-    SHA512 fb34eeb585f6820499734f10f03a4efd0d9a9b4be56f9bee21f3564eb92be56e7abe7682e476fafaff4733939f33f91cb4ab9209140b19f7b740538853433532
+    REPO xtensor-stack/xsimd
+    REF "${VERSION}"
+    SHA512 a7030787e49bfb8fd544c94abf5e44ebdf4d922298e7ecbe9a51c473a956f3461d877611b4b0e2f5e962815f513589a124045e3909c864d0ba0d86a96a46ad21
     HEAD_REF master
 )
 
-vcpkg_check_features(xcomplex ENABLE_XTL_COMPLEX)
-
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DENABLE_FALLBACK=OFF
-        -DENABLE_XTL_COMPLEX=${ENABLE_XTL_COMPLEX}
-        -DBUILD_TESTS=OFF
-        -DDOWNLOAD_GTEST=OFF
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        xcomplex ENABLE_XTL_COMPLEX
 )
 
-vcpkg_install_cmake()
+set(VCPKG_BUILD_TYPE release) # header-only port
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/${PORT})
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DBUILD_TESTS=OFF
+        ${FEATURE_OPTIONS}
+)
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/lib)
+vcpkg_cmake_install()
 
-# Handle copyright
-configure_file(${SOURCE_PATH}/LICENSE ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/${PORT})
+vcpkg_fixup_pkgconfig()
 
-# CMake integration test
-vcpkg_test_cmake(PACKAGE_NAME ${PORT})
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")

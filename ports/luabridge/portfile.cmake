@@ -1,20 +1,10 @@
-include(vcpkg_common_functions)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO vinniefalco/LuaBridge
-    REF 2.3.1
-    SHA512 6478410ec5863f40087f023a68c585b4c84974aa27dd522552094f6c823bee9820edc77685a9932b5d7d74f26cced4d624810dbfbaa3694f55c0b7803d2d5216
+    REF ${VERSION}
+    SHA512 d159bbe3411bf71f3737733e207daef1b583d5efa005d4f6917b4f81e1b03ee0085e1998d797c4149815d0376f0ee6ef03d56a3c314e099ef28f24921b3480f4
     HEAD_REF master
 )
 
-file(
-    COPY ${SOURCE_PATH}/Source/LuaBridge
-    DESTINATION ${CURRENT_PACKAGES_DIR}/include
-)
-
-# Handle copyright
-configure_file(
-    ${SOURCE_PATH}/README.md
-    ${CURRENT_PACKAGES_DIR}/share/luabridge/copyright
-    COPYONLY
-)
+file(COPY "${SOURCE_PATH}/Source/LuaBridge" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(INSTALL "${SOURCE_PATH}/README.md" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

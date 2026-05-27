@@ -1,50 +1,53 @@
-include(vcpkg_common_functions)
-
-set(VERSION 1.2.11)
-
-vcpkg_download_distfile(ARCHIVE_FILE
-    URLS "http://www.zlib.net/zlib-${VERSION}.tar.gz" "https://downloads.sourceforge.net/project/libpng/zlib/${VERSION}/zlib-${VERSION}.tar.gz"
-    FILENAME "zlib1211.tar.gz"
-    SHA512 73fd3fff4adeccd4894084c15ddac89890cd10ef105dd5e1835e1e9bbb6a49ff229713bd197d203edfa17c2727700fce65a2a235f07568212d820dca88b528ae
-)
-
-vcpkg_extract_source_archive_ex(
+# When this port is updated, the minizip port should be updated at the same time
+vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    ARCHIVE ${ARCHIVE_FILE}
-    REF ${VERSION}
-    PATCHES
-        "cmake_dont_build_more_than_needed.patch"
+    REPO madler/zlib
+    REF v${VERSION}
+    SHA512 16fea4df307a68cf0035858abe2fd550250618a97590e202037acd18a666f57afc10f8836cbbd472d54a0e76539d0e558cb26f059d53de52ff90634bbf4f47d4
+    HEAD_REF master
 )
 
-# This is generated during the cmake build
-file(REMOVE ${SOURCE_PATH}/zconf.h)
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" ZLIB_BUILD_SHARED)
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" ZLIB_BUILD_STATIC)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DSKIP_INSTALL_FILES=ON
-        -DSKIP_BUILD_EXAMPLES=ON
-    OPTIONS_DEBUG
-        -DSKIP_INSTALL_HEADERS=ON
+        -DZLIB_BUILD_TESTING=OFF
+        -DZLIB_BUILD_SHARED=${ZLIB_BUILD_SHARED}
+        -DZLIB_BUILD_STATIC=${ZLIB_BUILD_STATIC}
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/zlib")
+vcpkg_fixup_pkgconfig()
 
-# Both dynamic and static are built, so keep only the one needed
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    if(EXISTS ${CURRENT_PACKAGES_DIR}/lib/zlibstatic.lib)
-        file(RENAME ${CURRENT_PACKAGES_DIR}/lib/zlibstatic.lib ${CURRENT_PACKAGES_DIR}/lib/zlib.lib)
-    endif()
-    if(EXISTS ${CURRENT_PACKAGES_DIR}/debug/lib/zlibstaticd.lib)
-        file(RENAME ${CURRENT_PACKAGES_DIR}/debug/lib/zlibstaticd.lib ${CURRENT_PACKAGES_DIR}/debug/lib/zlibd.lib)
+if(VCPKG_TARGET_IS_WINDOWS AND VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/lib/pkgconfig/zlib.pc" " -lz" " -lzs")
+endif()
+if(NOT VCPKG_BUILD_TYPE)
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/zlib.pc" "/include" "/../include")
+    if(VCPKG_TARGET_IS_WINDOWS)
+        if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+            vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/zlib.pc" " -lz" " -lzsd")
+        else()
+            vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/zlib.pc" " -lz" " -lzd")
+        endif()
     endif()
 endif()
 
-file(INSTALL ${CMAKE_CURRENT_LIST_DIR}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/zlib RENAME copyright)
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/zconf.h" "ifdef ZLIB_DLL" "if 0")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/zlib/ZLIBConfig.cmake" [[_ZLIB_supported_components "shared" "static"]] [[_ZLIB_supported_components "static"]])
+else()
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/zconf.h" "ifdef ZLIB_DLL" "if 1")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/zlib/ZLIBConfig.cmake" [[_ZLIB_supported_components "shared" "static"]] [[_ZLIB_supported_components "shared"]])
+endif()
 
-vcpkg_copy_pdbs()
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/usage DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT})
-
-vcpkg_test_cmake(PACKAGE_NAME ZLIB MODULE)
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/vcpkg-cmake-wrapper.cmake" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

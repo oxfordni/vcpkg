@@ -1,47 +1,145 @@
-INCLUDE(vcpkg_common_functions)
+# Some dll doesn't export any symbols.
+# https://doc.dpdk.org/guides-25.07/windows_gsg/intro.html#limitations
+if(VCPKG_TARGET_IS_WINDOWS)
+  vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+endif()
 
-IF (NOT VCPKG_CMAKE_SYSTEM_NAME OR NOT VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    MESSAGE(FATAL_ERROR "Intel dpdk currently only supports Linux/BSD platforms")
-ENDIF ()
+if(VCPKG_TARGET_IS_LINUX AND VCPKG_HOST_IS_LINUX)
+  execute_process(
+    COMMAND uname --kernel-release
+    OUTPUT_VARIABLE KERNEL_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(KERNEL_VERSION VERSION_LESS 4.4)
+    message(
+      WARNING
+        "  Kernel version requires >= 4.4 on Linux (current version: ${KERNEL_VERSION})\n"
+        "  Building may fail or have functional defects. See\n"
+        "    https://doc.dpdk.org/guides/linux_gsg/sys_reqs.html#system-software"
+    )
+  endif()
 
-VCPKG_FROM_GITHUB(
-        OUT_SOURCE_PATH SOURCE_PATH
-        REPO DPDK/dpdk
-        REF v19.02
-        SHA512 e0cc7081b163b4e264b65c1abb7e0f8aa29211539cecc5cf52986699b800eb4d4f2026377c3048c5c3bd2791e41f21645bb655797a3300740aa83633fb87626e
-        HEAD_REF master
+  execute_process(
+    COMMAND sh -c "ldd --version | head -n1 | rev | cut -d' ' -f 1 | rev"
+    OUTPUT_VARIABLE GLIBC_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  if(GLIBC_VERSION VERSION_LESS 2.7)
+    message(
+      FATAL_ERROR
+        "glibc version requires >= 2.7 (for features related to cpuset)")
+  endif()
+endif()
+
+# Add a leading zero to the minor version if it consists of only one digit, otherwise the regex does nothing
+string(REGEX REPLACE "^([0-9]+)\\.([0-9])(\\..*)$" "\\1.0\\2\\3" VERSION_REF "${VERSION}")
+vcpkg_from_github(
+  OUT_SOURCE_PATH SOURCE_PATH
+  REPO DPDK/dpdk
+  REF "v${VERSION_REF}"
+  SHA512 37b49b5b5481036e0d563794222fc37c358f3c81b449e4252adb3bb1365e5dde14d7310a1ace810ee2443902a1cc7b177dca76666dd324241142062532a7509d
+  HEAD_REF main
+  PATCHES
+      0001-enable-either-static-or-shared-build.patch
+      0002-fix-dependencies.patch
+      0003-remove-examples-src-from-datadir.patch
+      0004-stop-building-apps.patch
+      0005-no-absolute-driver-path.patch
+      0006-rename-sched.h.patch
 )
 
-FIND_PATH(NUMA_INCLUDE_DIR NAME numa.h
-          PATHS ENV NUMA_ROOT
-          HINTS $ENV{HOME}/local/include /opt/local/include /usr/local/include /usr/include
-          )
-IF (NOT NUMA_INCLUDE_DIR)
-    MESSAGE(FATAL_ERROR "Numa library not found.\nTry: 'sudo yum install numactl numactl-devel' (or sudo apt-get install libnuma1 libnuma-dev)")
-ENDIF ()
+macro(append_bool_option feature_name option_name)
+  if("${feature_name}" IN_LIST FEATURES)
+    list(APPEND DPDK_OPTIONS -D${option_name}=true)
+  else()
+    list(APPEND DPDK_OPTIONS -D${option_name}=false)
+  endif()
+endmacro()
 
-VCPKG_CONFIGURE_CMAKE(
-        SOURCE_PATH ${CMAKE_CURRENT_LIST_DIR}
-        PREFER_NINJA
-        OPTIONS
-        -DSOURCE_PATH=${SOURCE_PATH}
+set(DPDK_OPTIONS "")
+set(DPDK_OPTIONS_RELEASE "")
+append_bool_option("docs" "enable_docs")
+append_bool_option("tests" "tests")
+append_bool_option("trace" "enable_trace_fp")
+
+set(PYTHON_PACKAGES "")
+if(VCPKG_TARGET_IS_WINDOWS)
+  # https://doc.dpdk.org/guides/windows_gsg/build_dpdk.html#option-3-native-build-on-windows-using-msvc
+  list(APPEND DPDK_OPTIONS "-Denable_stdatomic=true")
+else()
+  list(APPEND PYTHON_PACKAGES pyelftools)
+endif()
+if("docs" IN_LIST FEATURES)
+  list(APPEND DPDK_OPTIONS_RELEASE "-Denable_docs=true")
+  vcpkg_find_acquire_program(DOXYGEN)
+  list(APPEND PYTHON_PACKAGES packaging sphinx)
+endif()
+if(PYTHON_PACKAGES)
+  x_vcpkg_get_python_packages(OUT_PYTHON_VAR PYTHON3 PYTHON_VERSION "3" PACKAGES ${PYTHON_PACKAGES})
+endif()
+
+vcpkg_configure_meson(SOURCE_PATH "${SOURCE_PATH}"
+  OPTIONS
+    -Ddeveloper_mode=disabled
+    -Ddisable_drivers=regex/cn9k
+    ${DPDK_OPTIONS}
+  OPTIONS_RELEASE
+    ${DPDK_OPTIONS_RELEASE}
+  ADDITIONAL_BINARIES
+    "doxygen = ['${DOXYGEN}']"
 )
+vcpkg_install_meson()
+vcpkg_fixup_pkgconfig()
 
-VCPKG_INSTALL_CMAKE()
+file(GLOB scripts "${CURRENT_PACKAGES_DIR}/bin/*.py")
+file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
+foreach(script IN LISTS scripts)
+  cmake_path(GET script FILENAME filename)
+  file(RENAME "${script}" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/${filename}")
+  file(REMOVE "${CURRENT_PACKAGES_DIR}/debug/bin/${filename}")
+endforeach()
+vcpkg_clean_executables_in_bin(FILE_NAMES none)
 
-# Headers are symbolic links here, gather all, resolve and copy real files
-FILE(GLOB_RECURSE HEADERS FOLLOW_SYMLINKS "${SOURCE_PATH}/build/include/*")
-SET(REAL_FILES "")
-FOREACH (HEADER ${HEADERS})
-    GET_FILENAME_COMPONENT(REAL_FILE "${HEADER}" REALPATH)
-    LIST(APPEND REAL_FILES "${REAL_FILE}")
-ENDFOREACH ()
+if("docs" IN_LIST FEATURES)
+  file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+  file(RENAME "${CURRENT_PACKAGES_DIR}/share/doc/dpdk" "${CURRENT_PACKAGES_DIR}/share/${PORT}/doc")
+endif()
 
-FILE(INSTALL ${SOURCE_PATH}/Release/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
-FILE(INSTALL ${SOURCE_PATH}/Debug/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
-FILE(INSTALL ${REAL_FILES} DESTINATION ${CURRENT_PACKAGES_DIR}/include/${PORT})
-FILE(INSTALL ${CMAKE_CURRENT_LIST_DIR}/dpdkConfig.cmake DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT})
-FILE(INSTALL ${CMAKE_CURRENT_LIST_DIR}/usage DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT})
-FILE(INSTALL ${SOURCE_PATH}/license/README DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share" "${CURRENT_PACKAGES_DIR}/share/doc")
 
-VCPKG_TEST_CMAKE(PACKAGE_NAME ${PORT})
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/license/README")
+
+# Move dll driver to bin directory.
+file(GLOB PMD_DIRS "${CURRENT_PACKAGES_DIR}/lib/dpdk/pmds-*")
+foreach(PMD_DIR ${PMD_DIRS})
+  get_filename_component(DIR_NAME ${PMD_DIR} NAME)
+  file(GLOB DLLS "${PMD_DIR}/*.dll")
+  if(DLLS)
+    file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/bin/dpdk/${DIR_NAME}")
+    file(COPY ${DLLS} DESTINATION "${CURRENT_PACKAGES_DIR}/bin/dpdk/${DIR_NAME}")
+    file(REMOVE ${DLLS})
+  endif()
+endforeach()
+if(NOT VCPKG_BUILD_TYPE)
+  file(GLOB PMD_DIRS_DEBUG "${CURRENT_PACKAGES_DIR}/debug/lib/dpdk/pmds-*")
+  foreach(PMD_DIR ${PMD_DIRS_DEBUG})
+    get_filename_component(DIR_NAME ${PMD_DIR} NAME)
+    file(GLOB DLLS "${PMD_DIR}/*.dll" "${PMD_DIR}/*.pdb")
+    if(DLLS)
+      file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/debug/bin/dpdk/${DIR_NAME}")
+      file(COPY ${DLLS} DESTINATION "${CURRENT_PACKAGES_DIR}/debug/bin/dpdk/${DIR_NAME}")
+      file(REMOVE ${DLLS})
+    endif()
+  endforeach()
+endif()
+
+# pkg_check_modules doesn't support -l:lib syntax
+# https://gitlab.kitware.com/cmake/cmake/-/issues/27452
+if (VCPKG_TARGET_IS_WINDOWS)
+  set(PREFIX_LIB "")
+else()
+  set(PREFIX_LIB "lib")
+endif()
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/lib/pkgconfig/libdpdk.pc" "-l:lib" "-l${PREFIX_LIB}")
+if(NOT VCPKG_BUILD_TYPE)
+  vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/libdpdk.pc" "-l:lib" "-l${PREFIX_LIB}")
+endif()

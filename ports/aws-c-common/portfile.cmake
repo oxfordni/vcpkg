@@ -1,37 +1,33 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO awslabs/aws-c-common
-    REF v0.3.11
-    SHA512 da845f748aecfff61209f542f4eac8d46738af52ce980d5c8315397f859429dfd9e4bf989ddf2fbe938d1efb33dce9c531c92cbe53388b1d1082d5caa97e8750
+    REF "v${VERSION}"
+    SHA512 577fdea85ea84563e2167d70f0988ceeccc6ab298a2ca034393872d1717237a64be0d0b5e9cd2083c2278b8c294bc4afb8f8d6bcc13e144259fa0e3166af35bb
     HEAD_REF master
     PATCHES
-        fix-dependencey-build-error.patch # This patch fixes dependency port compilation failure
         disable-internal-crt-option.patch # Disable internal crt option because vcpkg contains crt processing flow
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DBUILD_TESTING=FALSE
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/aws-c-common/cmake)
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake)
+string(REPLACE "dynamic" "shared" subdir "${VCPKG_LIBRARY_LINKAGE}")
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}/${subdir}" DO_NOT_DELETE_PARENT_CONFIG_PATH)
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}")
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/${PORT}/${PORT}-config.cmake" [[/${type}/]] "/")
 
 file(REMOVE_RECURSE
-	${CURRENT_PACKAGES_DIR}/debug/include
-	${CURRENT_PACKAGES_DIR}/debug/lib/aws-c-common
-	${CURRENT_PACKAGES_DIR}/lib/aws-c-common
-	)
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/lib/${PORT}"
+	"${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/lib/${PORT}"
+)
 
 vcpkg_copy_pdbs()
 
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/aws-c-common RENAME copyright)
-
-file(REMOVE_RECURSE
-	${CURRENT_PACKAGES_DIR}/debug/share
-)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

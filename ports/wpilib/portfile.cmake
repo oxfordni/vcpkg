@@ -1,67 +1,61 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO wpilibsuite/allwpilib
-    REF 3dfb01d45b971ffdfeea50ce58653eff592807d9
-    SHA512 188923cbe166f5812a24a06d8af56bda289aaed38231d45583d423e51e9cd23bb257ade02fdc26e8d0fdd6cdcb793282c04ac80ebad76f29fdbd0a3c1a10f05c
+    REF 165ebe4c79c437c7ba6c03af4a88a8c8680f742a
+    SHA512 f6ee07db0a119a7ac5876c4b0cf74abfb6af635d3d3ba913300138c450f62f6595ac4849bc499346f9f0179cc563f548a5e8a9a47122af593b425af453afd99f
+    PATCHES
+        no-werror.patch
+        windows-install-location.patch
+        missing-find_dependency.patch
+        fix-usage.patch
+        fix-build-error-with-fmt11.patch
+        fix-fmt.patch #https://github.com/wpilibsuite/allwpilib/pull/6796
 )
 
-set(WITHOUT_JAVA ON)
-set(WITHOUT_CSCORE ON)
-set(WITHOUT_ALLWPILIB ON)
-
-if ("cameraserver" IN_LIST FEATURES)
-  set(WITHOUT_CSCORE OFF)
+if("allwpilib" IN_LIST FEATURES)
+    vcpkg_from_github(
+        OUT_SOURCE_PATH SOURCE_PATH_APRILTAG
+        REPO wpilibsuite/apriltag
+        REF e55b751f2465bd40a880d9acb87d24289e2af89e
+        SHA512 a5d824d11312f7f5229bad162349586e9c855cd1dc03f33235c045f2d5235932227eb17f9e9c801b46a28991cddcf7ad16d39549560251d7d9d52ce72f094a73
+    )
 endif()
 
-if ("allwpilib" IN_LIST FEATURES)
-  set(WITHOUT_ALLWPILIB OFF)
-endif()
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        cameraserver WITH_CSCORE
+        allwpilib WITH_SIMULATION_MODULES
+        allwpilib WITH_WPILIB
+)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_find_acquire_program(PYTHON3)
+x_vcpkg_get_python_packages(PYTHON_EXECUTABLE "${PYTHON3}" PACKAGES jinja2)
 
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-      -DWITHOUT_JAVA=${WITHOUT_JAVA}
-      -DWITHOUT_CSCORE=${WITHOUT_CSCORE}
-      -DWITHOUT_ALLWPILIB=${WITHOUT_ALLWPILIB}
-      -DUSE_VCPKG_LIBUV=ON
-      -DFLAT_INSTALL_WPILIB=ON
+        ${FEATURE_OPTIONS}
+        -DWITH_JAVA=OFF
+        -DWITH_EXAMPLES=OFF
+        -DWITH_TESTS=OFF
+        -DWITH_GUI=OFF
+        -DWITH_SIMULATION_MODULES=OFF
+        -DUSE_SYSTEM_FMTLIB=ON
+        -DUSE_SYSTEM_LIBUV=ON
+        -DUSE_SYSTEM_EIGEN=ON
+        "-DFETCHCONTENT_SOURCE_DIR_APRILTAGLIB=${SOURCE_PATH_APRILTAG}"
+    MAYBE_UNUSED_VARIABLES
+        FETCHCONTENT_SOURCE_DIR_APRILTAGLIB
 )
-vcpkg_install_cmake()
-
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/ntcore/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/wpiutil/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-if (NOT WITHOUT_ALLWPILIB)
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/wpilibc/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/hal/gen/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/hal/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/include/gen)
-endif()
-if (NOT WITHOUT_CSCORE)
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/cameraserver/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/include/cscore/ DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-endif()
-
-if(NOT VCPKG_LIBRARY_LINKAGE STREQUAL "static")
-  file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/bin FILES_MATCHING PATTERN "*.dll")
-  file(COPY ${CURRENT_PACKAGES_DIR}/debug/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin FILES_MATCHING PATTERN "*.dll")
-
-  file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/bin FILES_MATCHING PATTERN "*.so")
-  file(COPY ${CURRENT_PACKAGES_DIR}/debug/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin FILES_MATCHING PATTERN "*.so")
-
-  file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/bin FILES_MATCHING PATTERN "*.dylib")
-  file(COPY ${CURRENT_PACKAGES_DIR}/debug/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin FILES_MATCHING PATTERN "*.dylib")
-endif()
-
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/lib FILES_MATCHING PATTERN "*.lib")
-file(COPY ${CURRENT_PACKAGES_DIR}/debug/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib FILES_MATCHING PATTERN "*.lib")
-
-file(COPY ${CURRENT_PACKAGES_DIR}/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/lib FILES_MATCHING PATTERN "*.a")
-file(COPY ${CURRENT_PACKAGES_DIR}/debug/wpilib/lib/ DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib FILES_MATCHING PATTERN "*.a")
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(PACKAGE_NAME wpilib)
+vcpkg_cmake_config_fixup(PACKAGE_NAME ntcore)
+vcpkg_cmake_config_fixup(PACKAGE_NAME wpimath)
+vcpkg_cmake_config_fixup(PACKAGE_NAME wpinet)
+vcpkg_cmake_config_fixup(PACKAGE_NAME wpiutil)
 
 vcpkg_copy_pdbs()
 
-file(INSTALL ${SOURCE_PATH}/LICENSE.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/wpilib RENAME copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include" "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.md")

@@ -1,10 +1,8 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO awslabs/aws-checksums
-    REF v0.1.3
-    SHA512 79bf71a6c4c268b27efe8a6a3c4b90281da4ce7f6e4c1c62fce80b11a4756ecfd4dc2b19624ace3f54137113d0cb56a517de0b91dd6338ee8ca069756bca13f4
+    REF "v${VERSION}"
+    SHA512 c61d0ea4129b717d3bf3760b6fc8fa8e04af9b1810ca390feab644c12889455a3d7d8886ce88f76dc6770ae65eb6558417df0760fc62145fa46f9e13ea0d3993
     HEAD_REF master
 )
 
@@ -14,27 +12,28 @@ else()
     set(STATIC_CRT_LNK OFF)
 endif()
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS -DSTATIC_CRT=${STATIC_CRT_LNK}
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DSTATIC_CRT=${STATIC_CRT_LNK}
+        "-DCMAKE_MODULE_PATH=${CURRENT_INSTALLED_DIR}/share/aws-c-common" # use extra cmake files
+        -DBUILD_TESTING=FALSE
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/aws-checksums/cmake)
+string(REPLACE "dynamic" "shared" subdir "${VCPKG_LIBRARY_LINKAGE}")
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}/${subdir}" DO_NOT_DELETE_PARENT_CONFIG_PATH)
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}")
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/${PORT}/${PORT}-config.cmake" [[/${type}/]] "/")
 
 file(REMOVE_RECURSE
-	${CURRENT_PACKAGES_DIR}/debug/include
-	${CURRENT_PACKAGES_DIR}/debug/lib/aws-checksums
-	${CURRENT_PACKAGES_DIR}/lib/aws-checksums
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/lib/${PORT}"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/lib/${PORT}"
 )
 
 vcpkg_copy_pdbs()
 
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/aws-checksums RENAME copyright)
-
-file(REMOVE_RECURSE
-	${CURRENT_PACKAGES_DIR}/debug/share
-)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

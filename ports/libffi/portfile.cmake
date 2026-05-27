@@ -1,42 +1,69 @@
-include(vcpkg_common_functions)
-
-if(NOT VCPKG_TARGET_ARCHITECTURE STREQUAL x86 AND NOT VCPKG_TARGET_ARCHITECTURE STREQUAL x64)
-    message(FATAL_ERROR "Architecture not supported")
-endif()
-
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
-
-vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO libffi/libffi
-    REF v3.1
-    SHA512 b214e4a876995f44e0a93bad5bf1b3501ea1fbedafbf33ea600007bd08c9bc965a1f0dd90ea870281c3add6c051febd19aa6cdce36f3ee8ba535ba2c0703153c
-    HEAD_REF master
+vcpkg_download_distfile(ARCHIVE
+    URLS "https://github.com/libffi/libffi/releases/download/v${VERSION}/libffi-${VERSION}.tar.gz"
+    FILENAME "libffi-${VERSION}.tar.gz"
+    SHA512 76974a84e3aee6bbd646a6da2e641825ae0b791ca6efdc479b2d4cbcd3ad607df59cffcf5031ad5bd30822961a8c6de164ac8ae379d1804acd388b1975cdbf4d
+)
+vcpkg_extract_source_archive(
+    SOURCE_PATH
+    ARCHIVE "${ARCHIVE}"
     PATCHES
-        export-global-data.patch
+        dll-bindir.diff
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
-
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DFFI_CONFIG_FILE=${CMAKE_CURRENT_LIST_DIR}/fficonfig.h
-    OPTIONS_DEBUG
-        -DFFI_SKIP_HEADERS=ON
-)
-
-vcpkg_install_cmake()
-vcpkg_copy_pdbs()
-
-if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
-    vcpkg_apply_patches(
-        SOURCE_PATH ${CURRENT_PACKAGES_DIR}/include
-        PATCHES
-            ${CMAKE_CURRENT_LIST_DIR}/auto-define-static-macro.patch
-    )
+vcpkg_list(SET options)
+if(VCPKG_TARGET_IS_WINDOWS)
+    set(linkage_flag "-DFFI_STATIC_BUILD")
+    if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
+        set(linkage_flag "-DFFI_BUILDING_DLL")
+    endif()
+    vcpkg_list(APPEND options "CFLAGS=\${CFLAGS} ${linkage_flag}")
 endif()
 
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/libffi)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/libffi/LICENSE ${CURRENT_PACKAGES_DIR}/share/libffi/copyright)
+vcpkg_cmake_get_vars(cmake_vars_file ADDITIONAL_LANGUAGES ASM)
+include("${cmake_vars_file}")
+if(VCPKG_DETECTED_CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+    vcpkg_add_to_path("${SOURCE_PATH}")
+    vcpkg_list(APPEND options "CCAS=msvcc.sh")
+    set(ccas_options "")
+    if(VCPKG_TARGET_ARCHITECTURE STREQUAL "x86")
+        string(APPEND ccas_options " -m32")
+    elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
+        string(APPEND ccas_options " -m64")
+    elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm")
+        string(APPEND ccas_options " -marm")
+    elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+        string(APPEND ccas_options " -marm64")
+    endif()
+    if(ccas_options)
+        vcpkg_list(APPEND options "CCASFLAGS=\${CCASFLAGS}${ccas_options}")
+    endif()
+endif()
+
+vcpkg_make_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    LANGUAGES C CXX ASM
+    OPTIONS
+        --enable-portable-binary
+        --disable-docs
+        --disable-multi-os-directory
+        ${options}
+)
+
+vcpkg_make_install()
+vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
+
+if (VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/ffi.h" "defined(FFI_STATIC_BUILD)" "1")
+endif()
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/unofficial-libffi-config.cmake" DESTINATION "${CURRENT_PACKAGES_DIR}/share/unofficial-libffi")
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/libffiConfig.cmake" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/man3"
+)
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

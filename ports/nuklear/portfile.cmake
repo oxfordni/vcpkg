@@ -1,11 +1,29 @@
-include(vcpkg_common_functions)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO vurtun/nuklear
-    REF 509c75b086351e82865f26a507235b60a63e1538
-    SHA512 d86fe93a8da8db955ccd28b353c19ea92aeb54efcf7a47ca160a576f4d52dbedc3abf7d547387a066851928c4f43c961b1daff097b3677a118c89f247042336a
+    REPO Immediate-Mode-UI/Nuklear
+    REF "${VERSION}"
+    SHA512 d35fb45ad8e940773f402cc6e5a5cb7bd70b61125a5ab057db554d02eeba4c80cdc205fd1a63f3143a9a0c0db55376feb05ada32253e6de6e9559b7f0f6bce34
     HEAD_REF master
 )
-file(INSTALL ${SOURCE_PATH}/nuklear.h DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-file(INSTALL ${SOURCE_PATH}/Readme.md DESTINATION ${CURRENT_PACKAGES_DIR}/share/nuklear RENAME copyright)
+
+file(COPY "${CURRENT_PORT_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}")
+
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        example INSTALL_EXAMPLE
+        demo    INSTALL_DEMO
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH ${SOURCE_PATH}
+    OPTIONS ${FEATURE_OPTIONS}
+)
+
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+
+vcpkg_cmake_config_fixup(PACKAGE_NAME unofficial-nuklear)
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug")
+
+file(INSTALL "${SOURCE_PATH}/src/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

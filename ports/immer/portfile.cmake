@@ -1,29 +1,34 @@
 # header-only library
 
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO arximboldi/immer
-    REF fe1d5151f8e62a97a953664f8de39b05ac0d2031
-    SHA512 2f78c2d85a24b2bcb69bbbf8b038c8bacb5a841e0f0ce7e4e521d369423c7d44f803a1c766a77d0955246a1b22476de15fa708a3786f05c41a3b705a574bbb71
+    REF "v${VERSION}"
+    SHA512 b001a23b503610ce989f68fee8136723b3b2cc788558a37a373aaa0347acf615a647b44759cda7f5ab4a6f9f15f46dcb9f22eac569310201d95161e8892e3619
     HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        "docs"  immer_BUILD_DOCS
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DENABLE_PYTHON=OFF
         -DENABLE_GUILE=OFF
         -DENABLE_BOOST_COROUTINE=OFF
+        -Dimmer_BUILD_TESTS=OFF
+        -Dimmer_BUILD_EXAMPLES=OFF
+        -Dimmer_BUILD_EXTRAS=OFF
+        ${FEATURE_OPTIONS}
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/Immer)
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/Immer)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/lib)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
 
 # Handle copyright
-configure_file(${SOURCE_PATH}/LICENSE ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

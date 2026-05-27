@@ -1,28 +1,33 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO gracicot/kangaru
-    REF v4.1.3
-    SHA512 7cfec493dff475c8fe88e336638897096359d3781ab8944aa6bb8f5b68a4dbc993f769142d0143ae5db751159cee1b125ea2728e8b73747950572c84ea354090
+    REF "v${VERSION}"
+    SHA512 03835b156d6da9239e316bfad07684b7f3197798c314f7d8f707e9e225795546887867c5af7fd8ae075b7143d2f160b0185d6be16146975c868dea99c7334129
     HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    OPTIONS -DKANGARU_EXPORT=Off -DKANGARU_TEST=Off
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        hashtypeid KANGARU_HASH_TYPE_ID
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DKANGARU_EXPORT=OFF
+        -DKANGARU_TEST=OFF
+        -DKANGARU_REVERSE_DESTRUCTION=ON
+        ${FEATURE_OPTIONS}
+)
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/kangaru)
+vcpkg_cmake_install()
+
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/kangaru)
 
 file(REMOVE_RECURSE
-    ${CURRENT_PACKAGES_DIR}/lib
-    ${CURRENT_PACKAGES_DIR}/debug
+    "${CURRENT_PACKAGES_DIR}/lib"
+    "${CURRENT_PACKAGES_DIR}/debug"
 )
 
-
 # Put the license file where vcpkg expects it
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/kangaru/)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/kangaru/LICENSE ${CURRENT_PACKAGES_DIR}/share/kangaru/copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

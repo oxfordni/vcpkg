@@ -1,58 +1,55 @@
-# Common Ambient Variables:
-#   CURRENT_BUILDTREES_DIR    = ${VCPKG_ROOT_DIR}\buildtrees\${PORT}
-#   CURRENT_PACKAGES_DIR      = ${VCPKG_ROOT_DIR}\packages\${PORT}_${TARGET_TRIPLET}
-#   CURRENT_PORT DIR          = ${VCPKG_ROOT_DIR}\ports\${PORT}
-#   PORT                      = current port name (zlib, etc)
-#   TARGET_TRIPLET            = current triplet (x86-windows, x64-windows-static, etc)
-#   VCPKG_CRT_LINKAGE         = C runtime linkage type (static, dynamic)
-#   VCPKG_LIBRARY_LINKAGE     = target library linkage type (static, dynamic)
-#   VCPKG_ROOT_DIR            = <C:\path\to\current\vcpkg>
-#   VCPKG_TARGET_ARCHITECTURE = target architecture (x64, x86, arm)
-#
-
-include(vcpkg_common_functions)
-
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://jaist.dl.sourceforge.net/project/geographiclib/distrib/GeographicLib-1.47-patch1.zip"
-    FILENAME "geographiclib-1.47-patch1.zip"
-    SHA512 d8fdfd7ae093057ec1a4ab922457fe71a3fb9975df5b673c276d62a0e9c4f212dc63652830b9d89e3890bc96aafd335992943cf6a1bce8260acf932d1eb7abfd
-)
-vcpkg_extract_source_archive_ex(
+vcpkg_from_sourceforge(
     OUT_SOURCE_PATH SOURCE_PATH
-    ARCHIVE ${ARCHIVE}
-    PATCHES
-           remove-tools-and-fix-version.patch
+    REPO geographiclib
+    REF distrib-C++
+    FILENAME "GeographicLib-${VERSION}.tar.gz"
+    SHA512 98d26a865ac158c608ea8a397174a9582b7949daf10acf59554cec88afb4a228135f3d5b980f195d72450e4affdbf0ea2502dbd4316b2ce17817bb628ca0a714
+    )
+
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        "tools" TOOLS
 )
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL dynamic)
-    vcpkg_configure_cmake(
-        SOURCE_PATH ${SOURCE_PATH}
-        OPTIONS -DGEOGRAPHICLIB_LIB_TYPE=SHARED
-        PREFER_NINJA # Disable this option if project cannot be built with Ninja
-        # OPTIONS -DUSE_THIS_IN_ALL_BUILDS=1 -DUSE_THIS_TOO=2
-        # OPTIONS_RELEASE -DOPTIMIZE=1
-        # OPTIONS_DEBUG -DDEBUGGABLE=1
-    )
+# GeographicLib's CMakeLists.txt allows the installation directories for
+# all the components to be set independently.  A "false" value, e.g., an
+# empty string or OFF (-DBINDIR=OFF), indicates that the corresponding
+# component should not be installed.
+if(TOOLS)
+    set(TOOL_OPTION "-DBINDIR=tools/${PORT}")
 else()
-    vcpkg_configure_cmake(
-        SOURCE_PATH ${SOURCE_PATH}
-        OPTIONS -DGEOGRAPHICLIB_LIB_TYPE=STATIC
-        PREFER_NINJA # Disable this option if project cannot be built with Ninja
-        # OPTIONS -DUSE_THIS_IN_ALL_BUILDS=1 -DUSE_THIS_TOO=2
-        # OPTIONS_RELEASE -DOPTIMIZE=1
-        # OPTIONS_DEBUG -DDEBUGGABLE=1
-    )
+    set(TOOL_OPTION -DBINDIR=OFF)
 endif()
 
-vcpkg_install_cmake()
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS ${TOOL_OPTION}
+    "-DCMAKEDIR=share/${PORT}"
+    -DDOCDIR=OFF
+    -DEXAMPLEDIR=OFF
+    -DMANDIR=OFF
+    -DSBINDIR=OFF
+)
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH cmake)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup()
 vcpkg_copy_pdbs()
 
-file(COPY ${CURRENT_PACKAGES_DIR}/lib/pkgconfig DESTINATION ${CURRENT_PACKAGES_DIR}/share/geographiclib)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/lib/pkgconfig)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+vcpkg_fixup_pkgconfig()
 
-file(INSTALL ${SOURCE_PATH}/00README.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/geographiclib RENAME readme)
-file(INSTALL ${SOURCE_PATH}/LICENSE.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/geographiclib RENAME copyright)
+if(tools IN_LIST FEATURES)
+    vcpkg_copy_tool_dependencies("${CURRENT_PACKAGES_DIR}/tools/${PORT}")
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/tools")
+
+file(INSTALL "${SOURCE_PATH}/LICENSE.txt"
+    DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
+    RENAME copyright)
+
+# Install usage
+configure_file("${CMAKE_CURRENT_LIST_DIR}/usage"
+    "${CURRENT_PACKAGES_DIR}/share/${PORT}/usage" @ONLY)

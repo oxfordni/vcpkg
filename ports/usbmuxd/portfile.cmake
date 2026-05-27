@@ -1,21 +1,22 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO libimobiledevice-win32/usbmuxd
-    REF v1.2.76
-    SHA512 b1bb479bf4ba0a71d7b70f55db4d01b68e024fe559265947e096d85cd736e4cc23c9ddbe07360641b63a5e1276c243e7fe2aa557323d1f5d22058c9a45de4f1a
-    HEAD_REF master-msvc
-    PATCHES
-        fix-dependence-pthreads.patch
+    REPO libimobiledevice/usbmuxd
+    REF 61b99ab5c25609c11369733a0df97c03a0581a56 # commits on 2023-07-21
+    SHA512 1b67a41f43e78bbf0966cbe68c9e35351d5a163d7d82aa6e5caed6c4f8ffc3c28faf74dc96890a35481b4856f6b6d95ebec9e8d2a665a099d8909b91bf408381
+    HEAD_REF master
 )
 
-vcpkg_install_msbuild(
-    SOURCE_PATH ${SOURCE_PATH}
-    PROJECT_SUBPATH usbmuxd.vcxproj
-    LICENSE_SUBPATH COPYING.GPLv2
-    USE_VCPKG_INTEGRATION
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}")
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
 )
 
-# No headers
+vcpkg_cmake_install()
+vcpkg_copy_tools(TOOL_NAMES usbmuxd AUTO_CLEAN)
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING.GPLv2" "${SOURCE_PATH}/COPYING.GPLv3")
+
 set(VCPKG_POLICY_EMPTY_INCLUDE_FOLDER enabled)

@@ -1,39 +1,40 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO libuv/libuv
-    REF d16e6094e1eb3b0b5981ef1dd7e03ec4d466944d
-    SHA512 338d25fec26ab69d300141086de825edabc5e65c50b6d9cf0e2f8f1937a930e4ecf4460ba2789cef64a85ad4a63c9b5f2a482ee2498c542f73e5915bbff6170f
+    REF "v${VERSION}"
+    SHA512 c23bb26f8fdcf678dbf14bcee9855830927a40b8ae64dfa287ef1e910f37ad30cb868ecdeaad6f7b2bf3f3fccca1a7282a31b22c547206b672f923d0651f5b0c
     HEAD_REF v1.x
+    PATCHES
+        fix-build-type.patch
+        ssize_t.patch
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" LIBUV_BUILD_SHARED)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS_DEBUG
-        -DUV_SKIP_HEADERS=ON
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DLIBUV_BUILD_TESTS=OFF
+        -DLIBUV_BUILD_BENCH=OFF
+        -DLIBUV_BUILD_SHARED=${LIBUV_BUILD_SHARED}
+        -DQEMU=OFF
+        -DASAN=OFF
+        -DTSAN=OFF
 )
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets(CONFIG_PATH share/unofficial-libuv TARGET_PATH share/unofficial-libuv)
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
 
-configure_file(
-    ${CMAKE_CURRENT_LIST_DIR}/unofficial-libuv-config.in.cmake
-    ${CURRENT_PACKAGES_DIR}/share/unofficial-libuv/unofficial-libuv-config.cmake
-    @ONLY
-)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/libuv)
+vcpkg_fixup_pkgconfig()
 
-file(READ ${CURRENT_PACKAGES_DIR}/include/uv.h UV_H)
 if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
-    string(REPLACE "defined(USING_UV_SHARED)" "1" UV_H "${UV_H}")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/uv.h" "defined(USING_UV_SHARED)" "1")
 else()
-    string(REPLACE "defined(USING_UV_SHARED)" "0" UV_H "${UV_H}")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/uv.h" "defined(USING_UV_SHARED)" "0")
 endif()
-file(WRITE ${CURRENT_PACKAGES_DIR}/include/uv.h "${UV_H}")
 
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/libuv)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/libuv/LICENSE ${CURRENT_PACKAGES_DIR}/share/libuv/copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share" "${CURRENT_PACKAGES_DIR}/debug/include")
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

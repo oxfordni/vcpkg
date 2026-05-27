@@ -1,32 +1,27 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO DaanDeMeyer/reproc
-    REF v6.0.0
-    SHA512 482eb7b52961878877d1e4a4f1e1a5a867ff5b83f0df3ce47c0eb68f43eabcde720ea7ccb2eeb960dbc29fc61c888db62751984425e9b27c7498dfa4441aa801
-    HEAD_REF master
+    REF "v${VERSION}"
+    SHA512 9a3af907ac8d8870022fbc2f172acb3a3cc5b5ec5c68a2882390ab1a0cd8a2ad354d4357180f86ba93af55caa12645c6ec28d549b6599be986ffa2d649d0da19
+    HEAD_REF main
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DREPROC++=ON
-        -DREPROC++_INSTALL=ON
-        -DREPROC_INSTALL=ON
+        -DREPROC_INSTALL_PKGCONFIG=OFF
+        -DREPROC_INSTALL_CMAKECONFIGDIR=share
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-file(GLOB REPROC_CMAKE_FILES ${CURRENT_PACKAGES_DIR}/lib/cmake/reproc++/*)
-file(INSTALL ${REPROC_CMAKE_FILES} DESTINATION ${CURRENT_PACKAGES_DIR}/share/reproc++)
-file(INSTALL ${CURRENT_PACKAGES_DIR}/debug/lib/cmake/reproc++/reproc++-targets-debug.cmake DESTINATION ${CURRENT_PACKAGES_DIR}/share/reproc++)
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/reproc)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-# Debug
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+foreach(TARGET reproc reproc++)
+    vcpkg_cmake_config_fixup(
+        PACKAGE_NAME ${TARGET}
+    )
+endforeach()
 
-# Handle License
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/reproc)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/reproc/LICENSE ${CURRENT_PACKAGES_DIR}/share/reproc/copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

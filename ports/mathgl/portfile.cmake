@@ -1,121 +1,109 @@
-include(vcpkg_common_functions)
+vcpkg_from_sourceforge(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO mathgl/mathgl
+    REF "mathgl%208.0"
+    FILENAME "mathgl-${VERSION}.tar.gz"
+    SHA512 1ff3023f1bbd7bfd84202777a0166a8d4255a020a07f3650b9858929345bc8a2ceea4db155d2c93ba32b762d2304474276290a9edac99fda70fb4b5bc12982c2
+    PATCHES
+        cmake-config.patch
+        dependencies.patch
+        linkage.patch
+        enable-examples.patch
+        fix-examples.patch
+        fix-cross-builds.patch
+        fix-format-specifiers.patch
+        fix-glut.patch
+        fix-mgllab.patch
+        include_functional.patch
+        fix-include-property.patch
+        fix_link_gsl.patch
+)
+file(REMOVE_RECURSE "${SOURCE_PATH}/addons/getopt")
 
-set(MATHGL_VERSION "2.4.3")
-vcpkg_download_distfile(ARCHIVE
-  URLS "https://downloads.sourceforge.net/project/mathgl/mathgl/mathgl%20${MATHGL_VERSION}/mathgl-${MATHGL_VERSION}.tar.gz"
-  FILENAME "mathgl-${MATHGL_VERSION}.tar.gz"
-  SHA512 e47fc8171ce80c8b33a8f03d9375bc036455dae539b47cf4ee922f8fa36f5afcf8b3f0666997764e453eb698c0e8c03da36dd0ac2bf71c158e95309b247d27de
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+FEATURES
+    arma    enable-arma
+    examples enable-examples
+    fltk    enable-fltk
+    gif     enable-gif
+    glut    enable-glut
+    gsl     enable-gsl
+    hdf5    enable-hdf5
+    jpeg    enable-jpeg
+    opengl  enable-opengl
+    png     enable-png
+    qt5     enable-qt5
+    wx      enable-wx
+    zlib    enable-zlib
 )
 
-vcpkg_extract_source_archive_ex(
-  OUT_SOURCE_PATH SOURCE_PATH
-  ARCHIVE ${ARCHIVE}
-  REF ${MATHGL_VERSION}
-  PATCHES
-    type_fix.patch
+if(VCPKG_TARGET_IS_OSX)
+    list(APPEND FEATURE_OPTIONS
+        -Denable-openmp=OFF
+        -Denable-pthread=ON
+    )
+endif()
+
+if(VCPKG_CROSSCOMPILING)
+    list(APPEND FEATURE_OPTIONS "-DMAKE_BIN_EXECUTABLE=${CURRENT_HOST_INSTALLED_DIR}/tools/${PORT}/make_bin${VCPKG_HOST_EXECUTABLE_SUFFIX}")
+endif()
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        "-DCMAKE_PROJECT_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/cmake-project-include.cmake"
+        -DMathGL_INSTALL_CMAKE_DIR:STRING=share/mathgl2
+        -DCMAKE_CXX_STANDARD=11 # minimum for armadillo on osx
+        -DCMAKE_DISABLE_FIND_PACKAGE_Intl=1
+        -DCMAKE_POLICY_DEFAULT_CMP0127=NEW # cmake_dependent_option condition syntax
 )
 
-set(enable-hdf5 OFF)
-if("hdf5" IN_LIST FEATURES)
-  set(enable-hdf5 ON)
-endif()
+vcpkg_cmake_install()
 
-set(enable-fltk OFF)
-if("fltk" IN_LIST FEATURES)
-  set(enable-fltk ON)
-endif()
-
-set(enable-gif OFF)
-if("gif" IN_LIST FEATURES)
-  set(enable-gif ON)
-endif()
-
-set(enable-png OFF)
-if("png" IN_LIST FEATURES)
-  set(enable-png ON)
-endif()
-
-set(enable-zlib OFF)
-if("zlib" IN_LIST FEATURES)
-  set(enable-zlib ON)
-endif()
-
-set(enable-jpeg OFF)
-if("jpeg" IN_LIST FEATURES)
-  set(enable-jpeg ON)
-endif()
-
-set(enable-gsl OFF)
-if("gsl" IN_LIST FEATURES)
-  set(enable-gsl ON)
-endif()
-
-set(enable-opengl OFF)
-if("opengl" IN_LIST FEATURES)
-  set(enable-opengl ON)
-endif()
-
-set(enable-glut OFF)
-if("glut" IN_LIST FEATURES)
-  set(enable-glut ON)
-endif()
-
-set(enable-wx OFF)
-if("wx" IN_LIST FEATURES)
-  set(enable-wx ON)
-endif()
-
-set(enable-qt5 OFF)
-if("qt5" IN_LIST FEATURES)
-  set(enable-qt5 ON)
-endif()
-
-vcpkg_configure_cmake(
-  SOURCE_PATH ${SOURCE_PATH}
-  PREFER_NINJA
-  OPTIONS
-   -Denable-hdf5=${enable-hdf5}
-   -Denable-fltk=${enable-fltk}
-   -Denable-gif=${enable-gif}
-   -Denable-png=${enable-png}
-   -Denable-zlib=${enable-zlib}
-   -Denable-jpeg=${enable-jpeg}
-   -Denable-gsl=${enable-gsl}
-   -Denable-opengl=${enable-opengl}
-   -Denable-glut=${enable-glut}
-   -Denable-wx=${enable-wx}
-   -Denable-qt5=${enable-qt5}
-)
-
-vcpkg_install_cmake()
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-
-if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-  vcpkg_fixup_cmake_targets(CONFIG_PATH cmake)
-  file(REMOVE ${CURRENT_PACKAGES_DIR}/mathgl2-config.cmake)
-  file(REMOVE ${CURRENT_PACKAGES_DIR}/debug/mathgl2-config.cmake)
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/mgl2/dllexport.h" "#ifdef MGL_STATIC_DEFINE" "#if 1")
 else()
-  vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/mathgl)
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/mgl2/dllexport.h" "#ifdef MGL_STATIC_DEFINE" "#if 0")
 endif()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-
-#somehow the native CMAKE_EXECUTABLE_SUFFIX does not work, so here we emulate it
-if(CMAKE_HOST_WIN32)
-  set(EXECUTABLE_SUFFIX ".exe")
+# MathGL exports proper CMake config under the MathGL2Config.cmake filename, and
+# a find_path/find_library based package under the mathgl2-config.cmake filename.
+# The latter doesn't support multi-config or static linkage requirements, and
+# the variable names don't match the package names, i.e. it is unusable.
+if(VCPKG_TARGET_IS_WINDOWS)
+    file(REMOVE "${CURRENT_PACKAGES_DIR}/mathgl2-config.cmake")
+    file(REMOVE "${CURRENT_PACKAGES_DIR}/debug/mathgl2-config.cmake")
 else()
-  set(EXECUTABLE_SUFFIX "")
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib/cmake")
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/lib/cmake")
 endif()
+vcpkg_cmake_config_fixup(PACKAGE_NAME mathgl2)
 
-file(REMOVE ${CURRENT_PACKAGES_DIR}/debug/bin/mglconv${EXECUTABLE_SUFFIX})
-file(REMOVE ${CURRENT_PACKAGES_DIR}/debug/bin/mgltask${EXECUTABLE_SUFFIX})
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/tools/mathgl/)
-file(RENAME ${CURRENT_PACKAGES_DIR}/bin/mglconv${EXECUTABLE_SUFFIX} ${CURRENT_PACKAGES_DIR}/tools/mathgl/mglconv${EXECUTABLE_SUFFIX})
-file(RENAME ${CURRENT_PACKAGES_DIR}/bin/mgltask${EXECUTABLE_SUFFIX} ${CURRENT_PACKAGES_DIR}/tools/mathgl/mgltask${EXECUTABLE_SUFFIX})
-vcpkg_copy_tool_dependencies(${CURRENT_PACKAGES_DIR}/tools/mathgl)
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/share/applications"
+    "${CURRENT_PACKAGES_DIR}/share/mime"
+    "${CURRENT_PACKAGES_DIR}/share/pixmaps"
+)
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-  file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
+set(tools mglconv mgltask)
+if(NOT VCPKG_CROSSCOMPILING)
+    list(APPEND tools make_bin)
 endif()
+if(enable-fltk)
+    list(APPEND tools mglview mgllab)
+endif()
+if(enable-qt5)
+    list(APPEND tools mglview udav)
+endif()
+list(REMOVE_DUPLICATES tools)
+vcpkg_copy_tools(TOOL_NAMES ${tools} AUTO_CLEAN)
 
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/mathgl RENAME copyright)
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/mgl2/config.h" "#define MGL_INSTALL_DIR	\"${CURRENT_PACKAGES_DIR}\"" "")
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/mgl2/config.h" "#define MGL_FONT_PATH\t\"${CURRENT_PACKAGES_DIR}/fonts\"" "" IGNORE_UNCHANGED) # there is no fonts folder
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/mgl2/config.h" "#define MGL_FONT_PATH\t\"${CURRENT_PACKAGES_DIR}/share/mathgl/fonts\"" "" IGNORE_UNCHANGED)
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

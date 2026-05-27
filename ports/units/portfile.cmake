@@ -1,25 +1,20 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO nholthaus/units
-    REF v2.3.0
-    SHA512 1b9d7806e82d0f437574562e647077b6d22c0add81a19b5ec71f53ab608642db2d785a70d03d13cb2eeea2a8bc2d20f112b6bdf49acf0afce44e8e07bb6b7c39
+    REF v${VERSION}
+    SHA512 9cedc52e0405140b9a8014195f59f4deb2edd155fe78df76005eb721974c2a640975d9b959777be48f41c24f6a0a7047536649958da847e2aa8b0c3b9a6d139a
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA # Disable this option if project cannot be built with Ninja
-    OPTIONS -DBUILD_TESTS=OFF
+set(VCPKG_BUILD_TYPE "release")
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DUNITS_BUILD_TESTS=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/units)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib")  # from CMake config
 
-# Handle copyright/readme/package files
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/units RENAME copyright)
-file(INSTALL ${SOURCE_PATH}/README.md DESTINATION ${CURRENT_PACKAGES_DIR}/share/units)
-file(RENAME ${CURRENT_PACKAGES_DIR}/cmake/unitsConfig.cmake ${CURRENT_PACKAGES_DIR}/share/units/unitsConfig.cmake)
-
-# remove uneeded directories
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/cmake)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

@@ -1,65 +1,60 @@
-include(vcpkg_common_functions)
+vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
-vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO apache/orc
-    REF 47a490f083bd411bf04bfed8131eef42606d7789
-    SHA512 c2650d9fd367a5ec04c79c16434728e5c20608131f21bfc89d412cbaf8dd4ae5900b03e59df21d3617d8c6a9504e4b14b1f788157afa90b57d733499d2995e39
-    HEAD_REF master
+vcpkg_download_distfile(ARCHIVE
+    URLS "https://archive.apache.org/dist/orc/orc-${VERSION}/orc-${VERSION}.tar.gz"
+    FILENAME "orc-${VERSION}.tar.gz"
+    SHA512 6be97bf80ca89765bfecdb7d24b7f2967af79f2cbf659ce835ab9345e2a356400942143f4c6b3c25e6ded1f5df811bd6be6d1005e8b99716d842b43072f61786
+)
+
+vcpkg_extract_source_archive(
+    SOURCE_PATH
+    ARCHIVE "${ARCHIVE}"
     PATCHES
-      0003-dependencies-from-vcpkg.patch
-      no-werror.patch
+        external-project.diff
+        tools-build.diff
+)
+file(GLOB modules "${SOURCE_PATH}/cmake_modules/Find*.cmake")
+file(REMOVE ${modules} "${SOURCE_PATH}/c++/libs/libhdfspp/libhdfspp.tar.gz")
+
+set(orc_format_version 1.1.1)
+vcpkg_download_distfile(ORC_FORMAT_ARCHIVE
+    URLS "https://dlcdn.apache.org/orc/orc-format-${orc_format_version}/orc-format-${orc_format_version}.tar.gz"
+    FILENAME "apache-orc-format-${orc_format_version}.tar.gz"
+    SHA512 8aa0bcd3345ed8be836995d4347175526f4b0fc91f41e27f29279fad39b94ff157f5cd597bc2d9f3dc403f5ba405807675a283abe822f8a83758b7c3b8292c1c
+)
+set(ENV{ORC_FORMAT_URL} "file://${ORC_FORMAT_ARCHIVE}")
+
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        tools   BUILD_TOOLS
 )
 
-file(REMOVE "${SOURCE_PATH}/cmake_modules/FindGTest.cmake")
-file(REMOVE "${SOURCE_PATH}/cmake_modules/FindLZ4.cmake")
-file(REMOVE "${SOURCE_PATH}/cmake_modules/FindZSTD.cmake")
-file(REMOVE "${SOURCE_PATH}/cmake_modules/FindProtobuf.cmake")
-file(REMOVE "${SOURCE_PATH}/cmake_modules/FindSnappy.cmake")
-file(REMOVE "${SOURCE_PATH}/cmake_modules/FindZLIB.cmake")
-
-if(CMAKE_HOST_WIN32)
-  set(PROTOBUF_EXECUTABLE ${CURRENT_INSTALLED_DIR}/tools/protobuf/protoc.exe)
-else()
-  set(PROTOBUF_EXECUTABLE ${CURRENT_INSTALLED_DIR}/tools/protobuf/protoc)
+if(VCPKG_TARGET_IS_WINDOWS)
+  list(APPEND FEATURE_OPTIONS "-DHAS_PRE_1970=OFF" "-DHAS_POST_2038=OFF")
 endif()
 
-if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-  set(BUILD_TOOLS OFF)
-else()
-  set(BUILD_TOOLS ON)
-endif()
-
-vcpkg_configure_cmake(
-  SOURCE_PATH ${SOURCE_PATH}
-  PREFER_NINJA
-  OPTIONS
-  -DBUILD_TOOLS=${BUILD_TOOLS}
-  -DBUILD_CPP_TESTS=OFF
-  -DBUILD_JAVA=OFF
-  -DINSTALL_VENDORED_LIBS=OFF
-  -DBUILD_LIBHDFSPP=OFF
-  -DPROTOBUF_EXECUTABLE:FILEPATH=${PROTOBUF_EXECUTABLE}
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DBUILD_CPP_TESTS=OFF
+        -DBUILD_JAVA=OFF
+        -DINSTALL_VENDORED_LIBS=OFF
+        -DORC_PACKAGE_KIND=vcpkg
+        -DSTOP_BUILD_ON_WARNING=OFF
+    OPTIONS_DEBUG
+        -DBUILD_TOOLS=OFF
 )
-
-vcpkg_install_cmake()
-
-file(GLOB TOOLS ${CURRENT_PACKAGES_DIR}/bin/orc-*)
-if(TOOLS)
-  file(COPY ${TOOLS} DESTINATION ${CURRENT_PACKAGES_DIR}/tools/orc)
-  file(REMOVE ${TOOLS})
-endif()
-
-file(GLOB BINS ${CURRENT_PACKAGES_DIR}/bin/*)
-if(NOT BINS)
-  file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
-endif()
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/orc RENAME copyright)
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup()
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/usage DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT})
+if("tools" IN_LIST FEATURES)
+    vcpkg_copy_tools(TOOL_NAMES csv-import orc-contents orc-memory orc-metadata orc-scan orc-statistics timezone-dump AUTO_CLEAN)
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/share/doc")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/NOTICE" "${SOURCE_PATH}/LICENSE")

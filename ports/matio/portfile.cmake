@@ -1,22 +1,55 @@
-include(vcpkg_common_functions)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tbeu/matio
-    REF v1.5.15
-    SHA512 5e80aef3e929ff306810861ba14bc82bdd9cb3090de60dbd6905cfa35706d8cbe6c40471e8abf41e5d0836c10083c359449d34bdf32c6b2022a73986e8303eb3
+    REF "v${VERSION}"
+    SHA512 22fbc6d9013d0897daaff53bdeddfe224eeea55f5b4991aca655b62a3e6287b654e2bd79fa2a11f1009ca63d36c898ecbdc9a32ae91489a246c823fc89fc8ecc
     HEAD_REF master
+    PATCHES
+        cmake-config.diff
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" BUILD_SHARED)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS_DEBUG -DDISABLE_INSTALL_HEADERS=ON
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        extended-sparse MATIO_EXTENDED_SPARSE
+        mat73           MATIO_WITH_HDF5
+        mat73           MATIO_MAT73
+        mat73           VCPKG_LOCK_FIND_PACKAGE_HDF5
+        zlib            MATIO_WITH_ZLIB
+        zlib            VCPKG_LOCK_FIND_PACKAGE_ZLIB
 )
 
-vcpkg_install_cmake()
-
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/matio RENAME copyright)
-
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DMATIO_BUILD_TESTING=OFF
+        -DMATIO_PIC=OFF  # Flags provided by the toolchain
+        -DMATIO_SHARED=${BUILD_SHARED}
+        -DMATIO_USE_CONAN=OFF
+    MAYBE_UNUSED_VARIABLES
+        VCPKG_LOCK_FIND_PACKAGE_HDF5
+        VCPKG_LOCK_FIND_PACKAGE_ZLIB
+)
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup()
+
+set(prefix "${CURRENT_INSTALLED_DIR}")
+set(exec_prefix [[${prefix}]])
+set(libdir [[${prefix}/lib]])
+set(includedir [[${prefix}/include]])
+configure_file("${SOURCE_PATH}/matio.pc.in" "${SOURCE_PATH}/matio.pc" @ONLY)
+file(INSTALL "${SOURCE_PATH}/matio.pc" DESTINATION "${CURRENT_PACKAGES_DIR}/lib/pkgconfig")
+if(NOT VCPKG_BUILD_TYPE)
+    set(includedir [[${prefix}/../include]])
+    file(INSTALL "${SOURCE_PATH}/matio.pc" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig")
+endif()
+vcpkg_fixup_pkgconfig()
+
+vcpkg_copy_tools(TOOL_NAMES matdump AUTO_CLEAN)
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

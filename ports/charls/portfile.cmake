@@ -1,27 +1,25 @@
-include(vcpkg_common_functions)
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/charls-2.0.0)
-vcpkg_download_distfile(ARCHIVE_FILE
-    URLS "https://github.com/team-charls/charls/archive/2.0.0.tar.gz"
-    FILENAME "charls-2.0.0.tar.gz"
-    SHA512 0a2862fad6d65b941c81f5f838db1fdc6a4625887281ddbf27e21be9084f607d27c8a27d246d6252e08358b2ed4aa0c2b7407048ca559fb40e94313ca72487dd
-)
-vcpkg_extract_source_archive(${ARCHIVE_FILE})
-
-vcpkg_apply_patches(
-    SOURCE_PATH ${SOURCE_PATH}
-    PATCHES
-        ${CMAKE_CURRENT_LIST_DIR}/0001_cmake.patch
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO team-charls/charls
+    REF "${VERSION}"
+    SHA512 b266b3f56f099419e75b301607db36475ffd4a76142431c74f94c60d2d2f1b1f278625dfd141bf986dcc60d5be4ec86f0ddc7cadd2eafaa7db201f9c0796bfda
+    HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DBUILD_TESTING=OFF
+        -DCHARLS_BUILD_TESTS=OFF
+        -DCHARLS_BUILD_SAMPLES=OFF
+        -DCHARLS_BUILD_FUZZ_TEST=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/charls)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(INSTALL ${SOURCE_PATH}/License.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/charls RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.md")
 
 vcpkg_copy_pdbs()
+
+vcpkg_fixup_pkgconfig()

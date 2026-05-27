@@ -1,34 +1,34 @@
-include(vcpkg_common_functions)
-
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO CopernicaMarketingSoftware/AMQP-CPP
-    REF v4.1.4
-    SHA512 d589756ad8e27ce6b6772128479083293c4dbb8c7aa79b7b08f0036ced9ab76ecb75e55458f04de8e2745c9732a6322f4e910f3f8611633c5cd5c35fb7dcaed1
+    REF "v${VERSION}"
+    SHA512 310e0d1bc1780d54bd1f9a99d114003aee7bdfe8930be198b3006f2ca174c32718844f88d72fd75259d6ce20d35a9dc77a61aea4c364e4af17ba8c87cae43259
     HEAD_REF master
     PATCHES
-        find-openssl.patch
+        fix-max_min_macros.patch
 )
 
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(VCPKG_TARGET_IS_LINUX)
     set(LINUX_TCP ON)
 else()
     set(LINUX_TCP OFF)
 endif()
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DAMQP-CPP_BUILD_SHARED=OFF
         -DAMQP-CPP_LINUX_TCP=${LINUX_TCP}
 )
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets(CONFIG_PATH cmake)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH cmake)
 
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/amqpcpp RENAME copyright)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_fixup_pkgconfig()
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

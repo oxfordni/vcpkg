@@ -1,32 +1,55 @@
-include(vcpkg_common_functions)
-
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
 vcpkg_from_github(
-  OUT_SOURCE_PATH SOURCE_PATH
-  REPO KhronosGroup/glslang
-  REF f88e5824d2cfca5edc58c7c2101ec9a4ec36afac
-  SHA512 92dc287e8930db6e00bde23b770f763dc3cf8a405a37b682bbd65e1dbde1f1f5161543fcc70b09eef07a5ce8bbe8f368ef84ac75003c122f42d1f6b9eaa8bd50
-  HEAD_REF master
-  PATCHES
-    CMakeLists-targets.patch
-    CMakeLists-windows.patch
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO KhronosGroup/glslang
+    REF "${VERSION}"
+    SHA512 68b00bb3c84e5ecfa1ca2ba50bf1bd3e9fe6e04ffb09fbfbd54274e9eea5c3aa5ea8d229fcd834f92d6dd11c52c77264ceb80b8461591eb4b062bf87aa7f0619
+    HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-  SOURCE_PATH ${SOURCE_PATH}
-  PREFER_NINJA
-  OPTIONS -DCMAKE_DEBUG_POSTFIX=d -DSKIP_GLSLANG_INSTALL=OFF
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        opt ENABLE_OPT
+        opt ALLOW_EXTERNAL_SPIRV_TOOLS
+        tools ENABLE_GLSLANG_BINARIES
+        rtti ENABLE_RTTI
 )
 
-vcpkg_install_cmake()
+if(ENABLE_GLSLANG_BINARIES)
+    vcpkg_find_acquire_program(PYTHON3)
+    get_filename_component(PYTHON_PATH ${PYTHON3} DIRECTORY)
+    vcpkg_add_to_path("${PYTHON_PATH}")
+endif()
 
-file(RENAME "${CURRENT_PACKAGES_DIR}/bin" "${CURRENT_PACKAGES_DIR}/tools")
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/bin")
-file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DBUILD_EXTERNAL=OFF
+        -DGLSLANG_TESTS=OFF
+        ${FEATURE_OPTIONS}
+)
 
-# Handle copyright
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/copyright DESTINATION ${CURRENT_PACKAGES_DIR}/share/glslang)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/glslang DO_NOT_DELETE_PARENT_CONFIG_PATH)
+vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/${PORT}/glslang-config.cmake"
+    [[${PACKAGE_PREFIX_DIR}/lib/cmake/glslang/glslang-targets.cmake]]
+    [[${CMAKE_CURRENT_LIST_DIR}/glslang-targets.cmake]]
+)
+file(REMOVE_RECURSE CONFIG_PATH "${CURRENT_PACKAGES_DIR}/lib/cmake" "${CURRENT_PACKAGES_DIR}/debug/lib/cmake")
 
-vcpkg_test_cmake(PACKAGE_NAME glslang)
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/glslang/Public/ShaderLang.h" "ifdef GLSLANG_IS_SHARED_LIBRARY" "if 1")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/glslang/Include/glslang_c_interface.h" "ifdef GLSLANG_IS_SHARED_LIBRARY" "if 1")
+endif()
+
+vcpkg_copy_pdbs()
+
+if(ENABLE_GLSLANG_BINARIES)
+    vcpkg_copy_tools(TOOL_NAMES glslang glslangValidator AUTO_CLEAN)
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")

@@ -1,17 +1,19 @@
-include(vcpkg_common_functions)
-
+# header-only library
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO mateidavid/zstr
-  REF v1.0.1
-  SHA512 616df2394c41038bc8512748a6a699cb45310ff518e75f591c7f957d6ab3da66a384755a6015c3eb588b576940cbff429ff9798985c452b6eda6e22f94dfb264
+  REF "v${VERSION}"
+  SHA512 21778d2b07c30da4fb9ee35832f39b02c95e54478c6610e28cece98908c51bcee6aed0754ec3948b71aa1e671a3d15ff2b555369379dc4583048c76d2b8305e8
   HEAD_REF master
 )
 
 # Install source files
-file(INSTALL ${SOURCE_PATH}/src/strict_fstream.hpp
-     ${SOURCE_PATH}/src/zstr.hpp
-     DESTINATION ${CURRENT_PACKAGES_DIR}/include/${PORT})
+file(INSTALL "${SOURCE_PATH}/src/strict_fstream.hpp"
+     "${SOURCE_PATH}/src/zstr.hpp"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include")
 
 # Install license
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
+
+# Install usage
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")

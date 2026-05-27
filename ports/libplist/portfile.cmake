@@ -1,27 +1,45 @@
-include(vcpkg_common_functions)
-
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY ONLY_DYNAMIC_CRT)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO libimobiledevice-win32/libplist
-    REF f279ef534ab5adeb81f063dee5e8a8fc3ca6d3ab
-    SHA512 52001a46935693e3ac5f0b8c3d13d9bf51c5f34189f6f006bd697d7e965f402460060708c4fb54ed43f49a217ac442fcb8dca252fcbccd3e6a154b6c9a8c2104
-    HEAD_REF msvc-master
-    PATCHES dllexport.patch
+    REPO libimobiledevice/libplist
+    REF ${VERSION}
+    SHA512 0477202686fb2f88684af30a97d53fd023ada470dfc7c5d8b32c0d80e09a4641e679522a53c5ad32eae61b21a2d0f1f0c660acd8482ba7951d728b42e4cf5eab
+    HEAD_REF master
+    PATCHES
+        001_fix_static_build.patch
 )
 
-set(ENV{_CL_} "$ENV{_CL_} /GL-")
-set(ENV{_LINK_} "$ENV{_LINK_} /LTCG:OFF")
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}")
 
-vcpkg_install_msbuild(
-    SOURCE_PATH ${SOURCE_PATH}
-    PROJECT_SUBPATH libplist.sln
-    INCLUDES_SUBPATH include
-    LICENSE_SUBPATH COPYING.lesser
-    REMOVE_ROOT_INCLUDES
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        tools BUILD_TOOLS
 )
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DPACKAGE_VERSION=${VERSION}
+)
+
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(PACKAGE_NAME unofficial-${PORT})
+vcpkg_fixup_pkgconfig()
+if("tools" IN_LIST FEATURES)
+    vcpkg_copy_tools(TOOL_NAMES plistutil AUTO_CLEAN)
 endif()
+
+if (VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/plist/plist.h"
+        "#ifdef LIBPLIST_STATIC" "#if 1"
+    )
+else()
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/plist/plist.h"
+        "#ifdef LIBPLIST_STATIC" "#if 0"
+    )
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")

@@ -1,34 +1,43 @@
-include(vcpkg_common_functions)
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/cfitsio)
-vcpkg_download_distfile(ARCHIVE
-    URLS "http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio3410.tar.gz"
-    FILENAME "cfitsio3410.tar.gz"
-    SHA512 b2ac31ab17e19eeeb4f1601f42f348402c0a4ab03725dbf74fe75eaabbee2f44f64f0c0ee7f0b2688bd93a9cc0dccf29f07e73b9148fff97fc78bebdbb5f6f0f
-)
-vcpkg_extract_source_archive(${ARCHIVE})
-
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO HEASARC/cfitsio
+    REF "cfitsio-${VERSION}"
+    SHA512 5db1b0c881169d2718cecff53c2de2ef2c93b933d48996025a0559ecff903f4aea0a0727aec0863b5eedafba4022325fcebd9092d50c427b3c1bab9a5c3fde6f
+    HEAD_REF master
+    PATCHES
+        dependencies.diff
 )
 
-vcpkg_install_cmake()
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        bzip2       USE_BZIP2
+        curl        USE_CURL
+        pthreads    USE_PTHREADS
+        tools       UTILS
+)
 
-# Remove duplicate include files 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include ${CURRENT_PACKAGES_DIR}/include/unistd.h)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    DISABLE_PARALLEL_CONFIGURE
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DTESTS=OFF
+    OPTIONS_DEBUG
+        -DUTILS=OFF
+)
 
-# cfitsio uses very common names for its headers, so they must be moved to a subdirectory
-file(RENAME ${CURRENT_PACKAGES_DIR}/include ${CURRENT_PACKAGES_DIR}/cfitsio)
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/include)
-file(RENAME ${CURRENT_PACKAGES_DIR}/cfitsio ${CURRENT_PACKAGES_DIR}/include/cfitsio)
+vcpkg_cmake_install()
+vcpkg_fixup_pkgconfig()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/cfitsio)
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL dynamic)
-    # move DLLs to bin directories for dynamic builds
-    file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/bin)
-    file(RENAME  ${CURRENT_PACKAGES_DIR}/lib/cfitsio.dll ${CURRENT_PACKAGES_DIR}/bin/cfitsio.dll)
-    file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/debug/bin)
-    file(RENAME  ${CURRENT_PACKAGES_DIR}/debug/lib/cfitsio.dll ${CURRENT_PACKAGES_DIR}/debug/bin/cfitsio.dll)
+if("tools" IN_LIST FEATURES)
+    vcpkg_copy_tools(TOOL_NAMES fitscopy fitsverify fpack funpack imcopy speed AUTO_CLEAN)
+    if(EXISTS "${VCPKG_INSTALLED_DIR}/bin/smem${VCPKG_TARGET_EXECUTABLE_SUFFIX}")
+        vcpkg_copy_tools(TOOL_NAMES smem AUTO_CLEAN)
+    endif()
 endif()
 
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/License.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/cfitsio RENAME copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include" "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/licenses/License.txt")

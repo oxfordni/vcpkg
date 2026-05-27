@@ -1,46 +1,36 @@
-include(vcpkg_common_functions)
-
-if (VCPKG_CMAKE_SYSTEM_NAME)
-    # The library supports Linux/Darwin/BSD, it is just not yet added here
-    message(FATAL_ERROR "vcpkg libfabric currently suports windows.  Please consider a pull request to add additional support!")
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 endif()
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO ofiwg/libfabric
-    REF v1.7.1
+    REF v${VERSION}
+    SHA512 c35d74a0347c316a1ef2a93afc375b1d472a56783f8515e279084c63eac2a06096bb0102ad919070a75641a0221027245efdb14e616f7888ca6f6685755a5900
     HEAD_REF master
-    SHA512 3ae06839295a5b581a5d9936ee991bb597672a4981cc7fa385f4db7645d5328156d758848827ec186c0056cf3abd97f8f3859ec16a8b5bbd0d1f979143ee7bb1
-    PATCHES
-      add_additional_includes.patch
 )
 
-if(NOT VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
-   message(FATAL_ERROR "VCPKG BUILD ERROR: libfabric only supports x64")
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_msbuild_install(
+        SOURCE_PATH "${SOURCE_PATH}"
+        PROJECT_SUBPATH libfabric.vcxproj
+        RELEASE_CONFIGURATION Release-v142
+        DEBUG_CONFIGURATION Debug-v142
+        OPTIONS
+            "/p:SolutionDir=${SOURCE_PATH}"
+    )
+    file(COPY "${SOURCE_PATH}/include/" DESTINATION "${CURRENT_PACKAGES_DIR}/include/libfabric")
+
+else()
+    vcpkg_make_configure(
+        SOURCE_PATH "${SOURCE_PATH}"
+        AUTORECONF
+        OPTIONS
+            --with-uring=no
+    )
+    vcpkg_make_install()
+    vcpkg_fixup_pkgconfig()
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 endif()
 
-set(LIBFABRIC_RELEASE_CONFIGURATION "Release-v141")
-set(LIBFABRIC_DEBUG_CONFIGURATION "Debug-v141")
-
-vcpkg_install_msbuild(
-    SOURCE_PATH ${SOURCE_PATH}
-    PROJECT_SUBPATH libfabric.vcxproj
-    INCLUDES_SUBPATH include
-    LICENSE_SUBPATH COPYING
-    PLATFORM "x64"
-    RELEASE_CONFIGURATION ${LIBFABRIC_RELEASE_CONFIGURATION}
-    DEBUG_CONFIGURATION ${LIBFABRIC_RELEASE_CONFIGURATION}
-    USE_VCPKG_INTEGRATION
-    ALLOW_ROOT_INCLUDES
-    OPTIONS
-      /p:SolutionDir=${SOURCE_PATH}
-      /p:AdditionalIncludeDirectories="${CURRENT_INSTALLED_DIR}/include"
-)
-
-#Move includes under subdirectory to avoid colisions with other libraries
-file(RENAME ${CURRENT_PACKAGES_DIR}/include ${CURRENT_PACKAGES_DIR}/includetemp)
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/include)
-file(RENAME ${CURRENT_PACKAGES_DIR}/includetemp ${CURRENT_PACKAGES_DIR}/include/libfabric)
-
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/libfabric RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

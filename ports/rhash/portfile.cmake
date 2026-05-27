@@ -1,25 +1,28 @@
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    message(FATAL_ERROR "UWP builds not supported")
-endif()
-
-include(vcpkg_common_functions)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO rhash/RHash
-    REF v1.3.8
-    SHA512 9dba4fa4dd49d323f2e440c5b93eac1ef62eb4046ec4ef611f0978c12c1739002f1ac1f1ec5e61bd359dc89e9ed612db71be91a795184ac5d5433280d27fa4c1
-    HEAD_REF master)
+    REF "v${VERSION}"
+    SHA512 c125b71ec36cce2ec31057239cac8b987555f5e3b152dacb6386b905f8cc4d449c1de5b53e5a5206a2d87975681225c9b54e5826c10ffd91b3440f8595d22b15
+    HEAD_REF master
+)
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH}/librhash)
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}/librhash")
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}/librhash
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}/librhash"
+    OPTIONS
+        -DRHASH_VERSION=${VERSION}
     OPTIONS_DEBUG
-        -DRHASH_SKIP_HEADERS=ON)
+        -DRHASH_SKIP_HEADERS=ON
+)
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup(PACKAGE_NAME unofficial-rhash)
+vcpkg_fixup_pkgconfig()
 
-file(COPY ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/rhash)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/rhash/COPYING ${CURRENT_PACKAGES_DIR}/share/rhash/copyright)
+if(VCPKG_TARGET_IS_WINDOWS AND VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/rhash.h" "# define RHASH_API" "# define RHASH_API __declspec(dllimport)")
+endif()
+
+file(INSTALL "${SOURCE_PATH}/COPYING" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

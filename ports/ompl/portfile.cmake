@@ -1,35 +1,31 @@
-include(vcpkg_common_functions)
+vcpkg_buildpath_length_warning(37)
 
-string(LENGTH "${CURRENT_BUILDTREES_DIR}" BUILDTREES_PATH_LENGTH)
-if(BUILDTREES_PATH_LENGTH GREATER 37 AND CMAKE_HOST_WIN32)
-    message(WARNING "${PORT}'s buildsystem uses very long paths and may fail on your system.\n"
-        "We recommend moving vcpkg to a short path such as 'C:\\src\\vcpkg' or using the subst command."
-    )
+# See https://github.com/ompl/ompl/blob/1.7.0/src/ompl/CMakeLists.txt#L37-L41
+if (VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
+    vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+else()
+    vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 endif()
 
-set(OMPL_VERSION 1.4.2)
-set(OMPL_DISTNAME "ompl")
-set(OMPL_CHECKSUM "1dc477ee471c0570fd94838b072105960e09186f29634e2f61d885153df36532ab40e30912b534c61f222c09dad63fc6097d324b53c265f9284f20c585d3095c")
-
-if("app" IN_LIST FEATURES)
-    set(OMPL_DISTNAME "omplapp")
-    set(OMPL_CHECKSUM "04812a659fd81c2c541907911cbf4e5987be034546e8e48ed3d11b2b2f9ad3f7931f15d30a32ce3b64deb66b13875970797ac5072e92bfa0841e8d27d85fcb18")
-endif()
-
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://bitbucket.org/ompl/ompl/downloads/${OMPL_DISTNAME}-${OMPL_VERSION}-Source.tar.gz"
-    FILENAME "${OMPL_DISTNAME}-${OMPL_VERSION}.tar.gz"
-    SHA512 ${OMPL_CHECKSUM}
-)
-
-vcpkg_extract_source_archive_ex(
+vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    ARCHIVE ${ARCHIVE}
-    REF ${OMPL_VERSION}
+    REPO ompl/ompl
+    REF "${VERSION}"
+    SHA512 359d0cb8d1a1735d608c8e10bbb233d80fdcc7ec0314a0b7bcb6b611592d0c6ebdb9dcd4aaf8da2369754cf50cc38347d2634305bc430abc07d7b981360990cf
+    HEAD_REF main
+    PATCHES
+        0001-disable-pkgconfig.patch
 )
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+
+# Remove internal find module files
+file(GLOB find_modules "${SOURCE_PATH}/CMakeModules/Find*.cmake")
+file(REMOVE_RECURSE ${find_modules})
+# Copy fake script. The ompl/omplapp ports don't support python features.
+file(COPY "${CURRENT_PORT_DIR}/FindPython.cmake" DESTINATION "${SOURCE_PATH}/CMakeModules")
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    DISABLE_PARALLEL_CONFIGURE
     OPTIONS
         -DOMPL_VERSIONED_INSTALL=OFF
         -DOMPL_REGISTRATION=OFF
@@ -37,34 +33,27 @@ vcpkg_configure_cmake(
         -DOMPL_BUILD_TESTS=OFF
         -DOMPL_BUILD_PYBINDINGS=OFF
         -DOMPL_BUILD_PYTESTS=OFF
+        -DR_EXEC=R_EXEC-NOTFOUND
+        -DCMAKE_DISABLE_FIND_PACKAGE_castxml=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_flann=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_spot=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Triangle=ON
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_fixup_pkgconfig()
+vcpkg_cmake_config_fixup(CONFIG_PATH share/ompl/cmake)
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH share/ompl/cmake)
-
-# Remove debug distribution and other, move ompl_benchmark to tools/ dir
 file(REMOVE_RECURSE
-    ${CURRENT_PACKAGES_DIR}/debug/include
-    ${CURRENT_PACKAGES_DIR}/debug/share
-    ${CURRENT_PACKAGES_DIR}/share/man
-    ${CURRENT_PACKAGES_DIR}/share/ompl/demos
-    ${CURRENT_PACKAGES_DIR}/share/ompl/ompl.conf
-    ${CURRENT_PACKAGES_DIR}/share/ompl/plannerarena
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/man"
+    "${CURRENT_PACKAGES_DIR}/share/ompl/demos"
 )
-if ("app" IN_LIST FEATURES)
-    file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/tools/ompl)
-    file(RENAME ${CURRENT_PACKAGES_DIR}/bin/ompl_benchmark.exe ${CURRENT_PACKAGES_DIR}/tools/ompl/ompl_benchmark.exe)
-    file(REMOVE_RECURSE
-        ${CURRENT_PACKAGES_DIR}/bin
-        ${CURRENT_PACKAGES_DIR}/debug/bin
-        ${CURRENT_PACKAGES_DIR}/share/ompl/resources
-        ${CURRENT_PACKAGES_DIR}/share/ompl/webapp
-    )
-endif()
 
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/ompl RENAME copyright)
+# Install CMake modules (used by port omplapp)
+file(GLOB cmake_modules "${SOURCE_PATH}/CMakeModules/*.cmake")
+file(COPY ${cmake_modules} DESTINATION "${CURRENT_PACKAGES_DIR}/share/ompl/CMakeModules")
 
-# Post-build test for cmake libraries
-# vcpkg_test_cmake(PACKAGE_NAME ompl)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

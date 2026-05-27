@@ -1,28 +1,22 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO KhronosGroup/EGL-Registry
-  REF e2562a9e7f567b837cdf96cf8b12e7fc0d88cc30
-  SHA512 8c380c26f6afc0ce2ab2dd2fe834daae0d0dbe9e2bd55ab30c80f8dfa5e234f1902e5735c4d8acf016f03924a46431b9bb794bb77f1f091c56905a98c38f5d04
+  REF 3ae2b7c48690d2ce13cc6db3db02dfc0572be65e
+  SHA512 c7b09ded4964fa427546bd345a29325105b79079b59642214dc8f04de113f42de2bc4272dbbbd4a801d92afc20297442fdfa12043a0900cf1e2b1cd83f260883
   HEAD_REF master
 )
 
 file(
   COPY
-    ${SOURCE_PATH}/api/KHR
-    ${SOURCE_PATH}/api/EGL
-  DESTINATION ${CURRENT_PACKAGES_DIR}/include
+    "${SOURCE_PATH}/api/KHR"
+    "${SOURCE_PATH}/api/EGL"
+  DESTINATION "${CURRENT_PACKAGES_DIR}/include"
 )
 
 file(
   COPY
-    ${SOURCE_PATH}/api/egl.xml
-  DESTINATION ${CURRENT_PACKAGES_DIR}/share/egl-registry
+    "${SOURCE_PATH}/api/egl.xml"
+  DESTINATION "${CURRENT_PACKAGES_DIR}/share/opengl"
 )
 
-file(
-  INSTALL ${SOURCE_PATH}/sdk/docs/man/copyright.xml
-  DESTINATION ${CURRENT_PACKAGES_DIR}/share/egl-registry
-  RENAME copyright
-)
+vcpkg_install_copyright(FILE_LIST "${CURRENT_PORT_DIR}/copyright")

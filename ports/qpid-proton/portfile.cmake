@@ -1,43 +1,59 @@
-include(vcpkg_common_functions)
-
 vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 
-vcpkg_find_acquire_program(PYTHON2)
-
-vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO apache/qpid-proton
-    REF 0.28.0
-    SHA512 dc253218a076ea56d64e0aaeb6ef9e7345bb9ac700c58b8ea6cb9b3c79d66b0667bcc62cbb45f9ce3455fa8f97b7dfb1c2096d269d1b5b9c5c650ef61a126cfe
-    HEAD_REF next
+vcpkg_download_distfile(ARCHIVE
+    URLS "https://archive.apache.org/dist/qpid/proton/${VERSION}/qpid-proton-${VERSION}.tar.gz"
+    FILENAME "qpid-proton-${VERSION}.tar.gz"
+    SHA512 3e7fe56ca1423f45f71d81f5e1d6ec5f21c073cc580628e12a8dbd545a86805b7312834e0d1234dde43797633d575ed639f21a96239b217500cc0a824482aae3
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_extract_source_archive(
+    SOURCE_PATH
+    ARCHIVE "${ARCHIVE}"
+    PATCHES
+        early-cxx.diff
+        fix-dependencies.patch
+)
+
+vcpkg_find_acquire_program(PYTHON3)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DPYTHON_EXECUTABLE=${PYTHON2}
-        -DENABLE_JSONCPP=ON
+        -DBUILD_BINDINGS=cpp
+        -DBUILD_EXAMPLES=OFF
+        -DBUILD_TESTING=OFF
         -DCMAKE_DISABLE_FIND_PACKAGE_CyrusSASL=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=${VCPKG_TARGET_IS_WINDOWS} # match dependencies
+        -DCMAKE_DISABLE_FIND_PACKAGE_opentelemetry-cpp=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_SWIG=ON
+        -DENABLE_JSONCPP=ON
+        -DENABLE_LINKTIME_OPTIMIZATION=OFF
+        -DENABLE_OPENTELEMETRYCPP=OFF
+        -DLIB_SUFFIX=
+        -DENABLE_WARNING_ERROR=OFF
+        -DENABLE_BENCHMARKS=OFF
+        -DENABLE_FUZZ_TESTING=OFF
+        "-DPython_EXECUTABLE=${PYTHON3}"
+        -DVCPKG_LOCK_FIND_PACKAGE_Libuv=${VCPKG_TARGET_IS_OSX} # match dependencies
+    MAYBE_UNUSED_VARIABLES
+        VCPKG_LOCK_FIND_PACKAGE_Libuv
 )
 
-vcpkg_install_cmake()
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
 
-file(GLOB SHARE_DIR ${CURRENT_PACKAGES_DIR}/share/*)
-file(RENAME ${SHARE_DIR} ${CURRENT_PACKAGES_DIR}/share/${PORT})
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/ProtonCpp" PACKAGE_NAME "protoncpp" DO_NOT_DELETE_PARENT_CONFIG_PATH)
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/Proton" PACKAGE_NAME "proton")
 
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/lib/cmake/tmp)
-file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/debug/lib/cmake/tmp)
-file(RENAME ${CURRENT_PACKAGES_DIR}/lib/cmake/Proton ${CURRENT_PACKAGES_DIR}/lib/cmake/tmp/Proton)
-file(RENAME ${CURRENT_PACKAGES_DIR}/debug/lib/cmake/Proton ${CURRENT_PACKAGES_DIR}/debug/lib/cmake/tmp/Proton)
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/tmp/Proton TARGET_PATH share/proton)
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/ProtonCpp TARGET_PATH share/protoncpp)
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/proton/CMakeLists.txt"
+    "${CURRENT_PACKAGES_DIR}/share/proton/FindCyrusSASL.cmake"
+    "${CURRENT_PACKAGES_DIR}/share/proton/examples"
+    "${CURRENT_PACKAGES_DIR}/share/proton/tests"
+)
 
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/${PORT}/LICENSE.txt
-            ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/share/qpid-proton/examples)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")

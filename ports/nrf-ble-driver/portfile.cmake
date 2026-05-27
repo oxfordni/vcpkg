@@ -1,5 +1,3 @@
-include(vcpkg_common_functions)
-
 if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(
 "${PORT} currently requires the following libraries from the system package manager:
@@ -11,37 +9,58 @@ endif()
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO NordicSemiconductor/pc-ble-driver
-    REF v4.1.1
-    SHA512 bb1853993b3f37836a8f7402e5c0452e8423c3a1c6e651cf353025022a32e16c72f06e2266e283c72fa7ddb0da7cf8cecb875a7a7762565599f2908c4858ce8e
+    REF v${VERSION}-hex
+    SHA512 1e8b5882aa3754a29a8f0ec11b8e70390db7ddf7bc50e1318adaaf4cd1ba2b787129d8003f8076ad39c35ec887ef3aeadbcb23fa5100b2be24956d118370cb84
     HEAD_REF master
     PATCHES
         001-arm64-support.patch
+        support-arm64-osx.diff # from https://github.com/NordicSemiconductor/pc-ble-driver/pull/271
+        gcc-11.2.0-compilation.patch # from https://github.com/NordicSemiconductor/pc-ble-driver/pull/272
+        add-include-chrono.patch
 )
 
 # Ensure that git is found within CMakeLists.txt by appending vcpkg's git executable dirpath to $PATH.
 # Git should always be available as it is downloaded during the bootstrap phase.
 # Append instead of prepend to $PATH to honor the user's git executable as a general rule.
-find_program(GIT NAMES git git.cmd)
-get_filename_component(GIT_EXE_DIRPATH "${GIT}" DIRECTORY)
-set(ENV{PATH} "$ENV{PATH};${GIT_EXE_DIRPATH}")
+vcpkg_find_acquire_program(GIT)
+get_filename_component(GIT_EXE_PATH "${GIT}" DIRECTORY)
+vcpkg_add_to_path("${GIT_EXE_PATH}")
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS -DDISABLE_EXAMPLES= -DDISABLE_TESTS= -DNRF_BLE_DRIVER_VERSION=4.1.0 -DCONNECTIVITY_VERSION=4.1.0
-)
-
-vcpkg_install_cmake()
-vcpkg_copy_pdbs()
-vcpkg_fixup_cmake_targets()
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-file(REMOVE ${CURRENT_PACKAGES_DIR}/debug/LICENSE)
-file(REMOVE ${CURRENT_PACKAGES_DIR}/LICENSE)
-
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
+set(OPTIONS)
+if (VCPKG_TARGET_IS_OSX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+    set(OPTIONS "-DARCH=${VCPKG_TARGET_ARCHITECTURE}")
 endif()
 
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DDISABLE_EXAMPLES=ON
+        -DDISABLE_TESTS=ON
+        -DNRF_BLE_DRIVER_VERSION=${VERSION}
+        -DCONNECTIVITY_VERSION=${VERSION}
+        ${OPTIONS}
+    MAYBE_UNUSED_VARIABLES
+        DISABLE_EXAMPLES
+        DISABLE_TESTS
+)
+
+vcpkg_cmake_install()
+vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup()
+
+# Copy hex files into shared folder for package
+foreach(HEX_DIR IN ITEMS "sd_api_v2" "sd_api_v3" "sd_api_v5" "sd_api_v6")
+    set(TARGET_DIRECTORY "${CURRENT_PACKAGES_DIR}/share/${PORT}/hex/${HEX_DIR}")
+    file(MAKE_DIRECTORY "${TARGET_DIRECTORY}")
+    file(INSTALL "${SOURCE_PATH}/hex/${HEX_DIR}" DESTINATION "${TARGET_DIRECTORY}/..")
+endforeach()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+
+
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin" "${CURRENT_PACKAGES_DIR}/debug/bin")
+endif()
+
+file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)

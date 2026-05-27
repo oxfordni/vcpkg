@@ -1,22 +1,20 @@
-include(vcpkg_common_functions)
+set(VCPKG_BUILD_TYPE release) # header-only
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO ThePhD/sol2
-    REF 5a4d7dca7f77e65aed15c0fb8f8acf1570677335
-    SHA512 5fc88a000d7a8379c3c8d8ee2dc3371514c4a58dcc3340b700565278ec69b7be0f108d599e3fe3b3ca347ef7c5b25ac01d83b1a988ac0189c8517b6ae66e96d6
+    REF "v${VERSION}"
+    SHA512 5a6ec7e16dae05ad6abea02842f62db8f64935eda438d67b2c264cbee80cee6d82200bd060387c6df837fe9f212dbe22b2772af34df1ce8bd43296dd9429558d
     HEAD_REF develop
+    PATCHES
+        header-only.patch
+        lua-5.5.diff # variation of https://github.com/ThePhD/sol2/pull/1723
+        pkgconfig.diff
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-)
+vcpkg_cmake_configure(SOURCE_PATH "${SOURCE_PATH}")
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH share/cmake/sol2)
+vcpkg_fixup_pkgconfig()
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/sol2)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/lib)
-
-# Handle copyright
-file(INSTALL ${SOURCE_PATH}/LICENSE.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/sol2 RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")

@@ -1,28 +1,33 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO xiph/ogg
-    REF 6ccfcc2dce48c0d430b45064d0e13c962a64c42f
-    SHA512 441950d541f626a2e668efab4ed429c453534ef0334aad410013f07870a4a99e347f7a7eed335d77af41f02ce3dd600564d982e4c976a0c4cb76c19b1231d39e
+    REF v${VERSION}
+    SHA512 c247e1da8b12f8b33272fafb6d7c171a1a2687c3632977439fa60b96ccc2ad751d88a2931bb3e18e1ddf2eea2e82cdd0aab087b2ec5393a9228c703476fa0167
     HEAD_REF master
-    PATCHES
-        missing_usize64.patch
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS -DINSTALL_DOCS=0 -DINSTALL_PKG_CONFIG_MODULE=0
+if(VCPKG_TARGET_IS_MINGW)
+    vcpkg_replace_string("${SOURCE_PATH}/win32/ogg.def" "LIBRARY ogg" "LIBRARY libogg")
+endif()
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 #https://gitlab.xiph.org/xiph/ogg/-/issues/2304
+        -DINSTALL_DOCS=OFF
+        -DINSTALL_PKG_CONFIG_MODULE=ON
+        -DBUILD_TESTING=OFF
+    MAYBE_UNUSED_VARIABLES
+        CMAKE_POLICY_VERSION_MINIMUM
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/ogg TARGET_PATH share/ogg)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/Ogg PACKAGE_NAME ogg)
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
 vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
 
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
-
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

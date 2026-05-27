@@ -1,36 +1,43 @@
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    message(FATAL_ERROR "${PORT} does not currently support UWP")
-endif()
-
-include(vcpkg_common_functions)
-
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO google/benchmark
-    REF v1.5.0
-    SHA512 a0df9aa3d03f676e302c76d83b436de36eea0a8517ab50a8f5a11c74ccc68a1f5128fa02474901002d8e6b5a4d290ef0272a798ff4670eab3e2d78dc86bb6cd3
-    HEAD_REF master
+    REF "v${VERSION}"
+    SHA512 f207a63868e0c52f31a66ff9fd0ee75183ce3aaaa0946b00a49b77836507363bac8574feef8d9da82810a3167847303d6edf939e74802ad17e5a615bbf61e372
+    HEAD_REF main
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        tools BENCHMARK_INSTALL_TOOLS
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DBENCHMARK_ENABLE_TESTING=OFF
-        -DCMAKE_DEBUG_POSTFIX=d
+        -DBENCHMARK_INSTALL_DOCS=OFF
+        -DBENCHMARK_ENABLE_WERROR=OFF
+        ${FEATURES}
 )
 
-vcpkg_install_cmake()
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/benchmark)
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/benchmark)
+vcpkg_fixup_pkgconfig()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
+if(BENCHMARK_INSTALL_TOOLS)
+    file(GLOB scripts "${CURRENT_PACKAGES_DIR}/share/googlebenchmark/tools/*.py")
+    file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
+    foreach(script IN LISTS scripts)
+      cmake_path(GET script FILENAME filename)
+      file(RENAME "${script}" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/${filename}")
+    endforeach()
+	file(RENAME "${CURRENT_PACKAGES_DIR}/share/googlebenchmark/tools/gbench" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/gbench")
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/share/googlebenchmark")
+endif()
 
-# Handle copyright
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/benchmark)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/benchmark/LICENSE ${CURRENT_PACKAGES_DIR}/share/benchmark/copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

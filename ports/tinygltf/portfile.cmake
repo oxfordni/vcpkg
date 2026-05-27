@@ -1,17 +1,19 @@
 # Header-only library
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO syoyo/tinygltf
-    REF v2.2.0
-    SHA512 5a63fab31dd49e25fe2a32f66bbcae5a6340ced403dc51de65ee7363bb9b358e546bbecd116a53062099f90a2579a5178dcc5c4268d4b99c0afe30fac20ad7cf
+    REF "v${VERSION}"
+    SHA512 3305c94aaa6f2b82ac2533bb17672b0ddd0239c413acc87b428be50dc0f9bcd4c300f6ed7f3077424ccc8237e4e75f1194d311d21f799809e0220eeb3f8900a4
     HEAD_REF master
 )
 
 # Put the licence file where vcpkg expects it
-file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/tinygltf/LICENSE)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/tinygltf/LICENSE ${CURRENT_PACKAGES_DIR}/share/tinygltf/copyright)
-
-# Copy the tinygltf header files
-file(COPY ${SOURCE_PATH}/tiny_gltf.h DESTINATION ${CURRENT_PACKAGES_DIR}/include)
+# Copy the tinygltf header files and fix the path to json
+vcpkg_replace_string("${SOURCE_PATH}/tiny_gltf.h" "#include \"json.hpp\"" "#include <nlohmann/json.hpp>")
+file(INSTALL
+        "${SOURCE_PATH}/tiny_gltf.h"
+        "${SOURCE_PATH}/tiny_gltf_v3.h"
+        "${SOURCE_PATH}/tinygltf_json.h"
+    DESTINATION "${CURRENT_PACKAGES_DIR}/include"
+)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

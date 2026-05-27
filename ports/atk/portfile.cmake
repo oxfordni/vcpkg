@@ -1,31 +1,42 @@
-include(vcpkg_common_functions)
-
-vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY ONLY_DYNAMIC_CRT)
-
-set(ATK_VERSION 2.24.0)
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/atk-${ATK_VERSION})
+string(REGEX MATCH [[^[0-9][0-9]*\.[1-9][0-9]*]] VERSION_MAJOR_MINOR ${VERSION})
 vcpkg_download_distfile(ARCHIVE
-    URLS "http://ftp.gnome.org/pub/GNOME/sources/atk/2.24/atk-${ATK_VERSION}.tar.xz"
-    FILENAME "atk-${ATK_VERSION}.tar.xz"
-    SHA512 3ae0a4d5f28d5619d465135c685161f690732053bcb70a47669c951fbf389b5d2ccc5c7c73d4ee8c5a3b2df14e2f5b082e812a215f10a79b27b412d077f5e962)
+    URLS
+        "https://download.gnome.org/sources/${PORT}/${VERSION_MAJOR_MINOR}/${PORT}-${VERSION}.tar.xz"
+        "https://www.mirrorservice.org/sites/ftp.gnome.org/pub/GNOME/sources/${PORT}/${VERSION_MAJOR_MINOR}/${PORT}-${VERSION}.tar.xz"
+    FILENAME "GNOME-${PORT}-${VERSION}.tar.xz"
+    SHA512 dffd0a0814a9183027c38a985d86cb6544858e9e7d655843e153440467957d6bc1abd9c9479a57078aea018053410438a30a9befb7414dc79020b223cd2c774b
+)
 
-vcpkg_extract_source_archive(${ARCHIVE})
-vcpkg_apply_patches(SOURCE_PATH ${SOURCE_PATH}/atk
-    PATCHES
-        ${CMAKE_CURRENT_LIST_DIR}/fix-encoding.patch)
+vcpkg_extract_source_archive(SOURCE_PATH ARCHIVE "${ARCHIVE}")
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
+if("introspection" IN_LIST FEATURES)
+    list(APPEND OPTIONS_RELEASE -Dintrospection=true)
+    vcpkg_get_gobject_introspection_programs(PYTHON3 GIR_COMPILER GIR_SCANNER)
+else()
+    list(APPEND OPTIONS_RELEASE -Dintrospection=false)
+endif()
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DCMAKE_PROGRAM_PATH=${CURRENT_INSTALLED_DIR}/tools/glib
+vcpkg_configure_meson(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS_RELEASE
+        ${OPTIONS_RELEASE}
     OPTIONS_DEBUG
-        -DATK_SKIP_HEADERS=ON)
+        -Dintrospection=false
+    ADDITIONAL_BINARIES
+        "glib-genmarshal='${CURRENT_HOST_INSTALLED_DIR}/tools/glib/glib-genmarshal'"
+        "glib-mkenums='${CURRENT_HOST_INSTALLED_DIR}/tools/glib/glib-mkenums'"
+        "g-ir-compiler='${GIR_COMPILER}'"
+        "g-ir-scanner='${GIR_SCANNER}'"
+)
+vcpkg_install_meson(ADD_BIN_TO_PATH)
 
-vcpkg_install_cmake()
 vcpkg_copy_pdbs()
 
-file(COPY ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/atk)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/atk/COPYING ${CURRENT_PACKAGES_DIR}/share/atk/copyright)
+vcpkg_fixup_pkgconfig()
+
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/atk-1.0/atk/atkmisc.h" "ifdef ATK_STATIC_COMPILATION" "if 1")
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

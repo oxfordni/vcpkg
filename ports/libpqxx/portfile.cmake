@@ -1,25 +1,31 @@
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO jtv/libpqxx
-    REF 6.4.4
-    SHA512 a168dbc7af210c711fa9f0f6e20d9d3abea167d412a642f591b104a109f11f4c262a27b6919340d405400a58baf7bcc663f7d3ec1b4ecd03f0a4b6c2960b5099
+    REF "${VERSION}"
+    SHA512 0c756bba078844346d18433f189eab771a490a3ebd441190421eab6dd177ab9917fae8b3f7b9f8a1e8db2b02c227ca408e07383da9d01d9abe7b6b9850ca2e6a
     HEAD_REF master
-	PATCHES
-		fix-deprecated-bug.patch
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/config-public-compiler.h.in DESTINATION ${SOURCE_PATH})
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/config-internal-compiler.h.in DESTINATION ${SOURCE_PATH})
+vcpkg_find_acquire_program(PYTHON3)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        "-DPython3_EXECUTABLE=${PYTHON3}"
+        -DSKIP_BUILD_TEST=ON
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/libpqxx)
 
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/libpqxx RENAME copyright)
+if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
+    # Not module from libpq
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib/pkgconfig" "${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig")
+else()
+    vcpkg_fixup_pkgconfig()
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include" "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

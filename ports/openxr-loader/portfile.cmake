@@ -1,79 +1,68 @@
-if (VCPKG_TARGET_ARCHITECTURE MATCHES "^arm*")
-  message(FATAL_ERROR "OpenXR does not support arm")
-endif()
-
-if (VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-  # Due to UWP restricting the usage of static CRT OpenXR cannot be built.
-  message(FATAL_ERROR "OpenXR does not support UWP")
-endif()
-
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO KhronosGroup/OpenXR-SDK
-    REF release-0.90.1
-    SHA512 99b16b52511fef740fa7a1e234213310a4490b8d7baf4d1e003b93cf4f37b28abf526f6ed2d1e27e9ee2b4949b1957f15c20d4e0f8d30687806fe782780697af
+    REPO KhronosGroup/OpenXR-SDK-Source
+    REF "release-${VERSION}"
+    SHA512 df3f3617e174636a59995a2260846381929f1131d5bca600b83c3cb92f1f5a04fe4ab86b8d7b305110e9234de3f5319e26a278faa219fadc6741553a4a63bd27
     HEAD_REF master
     PATCHES
-        # embedded python uses ignores PYTHONPATH
-        0001-fix-embedded-python-path.patch
-        # Pkg-config is not available on the Vcpkg CI systems, don't depend on it for the xlib backend
-        0002-fix-linux-pkgconfig-dependency.patch
-        # Python < 3.6 doesn't allow a WindowsPath object to act as a pathlike in os.path functions
-        0003-windows-path-python-fix.patch
-        0004-fix-fatal-errorC1189.patch
+        fix-openxr-sdk-jsoncpp.patch
+        msvc-crt.diff
 )
 
-# Weird behavior inside the OpenXR loader.  On Windows they force shared libraries to use static crt, and
-# vice-versa.  Might be better in future iterations to patch the CMakeLists.txt for OpenXR
-if (NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-        set(DYNAMIC_LOADER OFF)
-        set(VCPKG_CRT_LINKAGE dynamic)
-    else()
-        set(DYNAMIC_LOADER ON)
-        set(VCPKG_CRT_LINKAGE static)
-    endif()
-endif()
+vcpkg_from_github(
+    OUT_SOURCE_PATH HPP_SOURCE_PATH
+    REPO KhronosGroup/OpenXR-hpp
+    REF af6f069aa1e003041311090237bb41471c776ff6
+    SHA512 986d214a7f725c9b8000a61d8614ecaa0495173a1683a5e1bec636be22f6617551ae43e3e0fd2b0cba6e427f6ed6014daa56deed8497b32cb1236cd35ed8788c
+    HEAD_REF master
+    PATCHES
+        python3_8_compatibility.patch
+)
+
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        vulkan  VCPKG_LOCK_FIND_PACKAGE_Vulkan
+)
+
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" DYNAMIC_LOADER)
 
 vcpkg_find_acquire_program(PYTHON3)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
+        ${FEATURE_OPTIONS}
         -DBUILD_API_LAYERS=OFF
+        -DBUILD_CONFORMANCE_TESTS=OFF
         -DBUILD_TESTS=OFF
+        -DCMAKE_INSTALL_INCLUDEDIR=include
         -DDYNAMIC_LOADER=${DYNAMIC_LOADER}
-        -DPYTHON_EXECUTABLE=${PYTHON3}
+        "-DPython3_EXECUTABLE=${PYTHON3}"
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_fixup_pkgconfig()
+vcpkg_copy_pdbs()
 
-function(COPY_BINARIES SOURCE DEST)
-    # hack, because CMAKE_SHARED_LIBRARY_SUFFIX seems to be unpopulated
-    if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-        set(SHARED_LIB_SUFFIX ".dll")
-    else()
-        set(SHARED_LIB_SUFFIX ".so")
-    endif()
-    file(MAKE_DIRECTORY ${DEST})
-    file(GLOB_RECURSE SHARED_BINARIES ${SOURCE}/*${SHARED_LIB_SUFFIX})
-    file(COPY ${SHARED_BINARIES} DESTINATION ${DEST})
-    file(REMOVE_RECURSE ${SHARED_BINARIES})
-endfunction()
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-# No CMake files are contained in /share only docs
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/share)
-
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/openxr-loader RENAME copyright)
-
-if(VCPKG_LIBRARY_LINKAGE STREQUAL dynamic)
-    COPY_BINARIES(${CURRENT_PACKAGES_DIR}/lib ${CURRENT_PACKAGES_DIR}/bin)
-    COPY_BINARIES(${CURRENT_PACKAGES_DIR}/debug/lib ${CURRENT_PACKAGES_DIR}/debug/bin)
+# "openxr-loader" matches "<name>*" for "OpenXR", so use the default.
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_cmake_config_fixup(CONFIG_PATH cmake)
+else()
+    vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/openxr)
 endif()
 
-vcpkg_copy_pdbs()
+# Generate the OpenXR C++ bindings
+set(ENV{OPENXR_REPO} "${SOURCE_PATH}")
+vcpkg_execute_required_process(
+    COMMAND "${PYTHON3}" "${HPP_SOURCE_PATH}/scripts/hpp_genxr.py" -quiet  -registry "${SOURCE_PATH}/specification/registry/xr.xml" -o "${CURRENT_PACKAGES_DIR}/include/openxr"
+    WORKING_DIRECTORY "${HPP_SOURCE_PATH}"
+    LOGNAME "openxr-hpp"
+)
+
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/doc"
+)
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

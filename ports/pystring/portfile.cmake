@@ -1,24 +1,24 @@
-include(vcpkg_common_functions)
+vcpkg_minimum_required(VERSION 2022-10-12) # for ${VERSION}
 
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO imageworks/pystring
-  REF v1.1.3
-  SHA512 a46bb2e96d6eb351a4a8097cde46ac2877d28e88f9e57e0ac36c42e8fc8543517c4be70306a01e2f88a891fc53c612494aeb37f47a200d94b8e1b050ed16eff6
+  REF v${VERSION}
+  SHA512 519c63cd46ff7b4394b9c94c4f8d2eccceafd06fe8d034de9ee43ffad80bd57fc1a40c77672753609d386fbe4fa8b9d62211a9a874f74457e1c699cd0a318b08
   HEAD_REF master
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}")
 
-vcpkg_configure_cmake(
-  SOURCE_PATH ${SOURCE_PATH}
-  PREFER_NINJA
+vcpkg_cmake_configure(
+  SOURCE_PATH "${SOURCE_PATH}"
   OPTIONS_DEBUG -DDISABLE_INSTALL_HEADERS=ON
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup()
 vcpkg_copy_pdbs()
 
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/pystring RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

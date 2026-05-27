@@ -1,30 +1,33 @@
-include(vcpkg_common_functions)
-
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    message(FATAL_ERROR "libexif currently only supports being built for desktop")
-endif()
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO libexif/libexif
-    REF libexif-0_6_21-release
-    SHA512 aecba54eb9c8b4ce29d11985a547074b381d72027b563c7aef865852b661a6f18a258c748fca6b16198344f4a86568b658071ac95cc1d332f576c6160e1f257d
+    REF "v${VERSION}"
+    SHA512 c586cf0b31bcdae126943453af8b2631c96a6854c10e6370772f61d1e38a8f8353536ff50c4222956e5bb5908c687c58e8ceb092e105bd0e5325994a34f28324
     HEAD_REF master
-    PATCHES add-missing-_stdint-h.patch
+    PATCHES
+        fix-ssize.patch
 )
 
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/config.h.cmake DESTINATION ${SOURCE_PATH})
-file(COPY ${CMAKE_CURRENT_LIST_DIR}/libexif.def    DESTINATION ${SOURCE_PATH})
+vcpkg_list(SET options)
+if("nls" IN_LIST FEATURES)
+    vcpkg_list(APPEND options "--enable-nls")
+else()
+    vcpkg_list(APPEND options "--disable-nls")
+endif()
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_make_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    AUTORECONF
+    OPTIONS
+        ${options}
+        --enable-internal-docs=no
+        --enable-ship-binaries=no
 )
 
-vcpkg_install_cmake()
-vcpkg_copy_pdbs()
+vcpkg_make_install()
+vcpkg_fixup_pkgconfig()
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/unofficial-libexif-config.cmake" DESTINATION "${CURRENT_PACKAGES_DIR}/share/unofficial-${PORT}")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
-file(INSTALL ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/libexif RENAME copyright)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

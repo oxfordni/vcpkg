@@ -1,60 +1,44 @@
-include(vcpkg_common_functions)
-
-set(PODOFO_VERSION 0.9.6)
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://sourceforge.net/projects/podofo/files/podofo/${PODOFO_VERSION}/podofo-${PODOFO_VERSION}.tar.gz/download"
-    FILENAME "podofo-${PODOFO_VERSION}.tar.gz"
-    SHA512 35c1a457758768bdadc93632385f6b9214824fead279f1b85420443fb2135837cefca9ced476df0d47066f060e9150e12fcd40f60fa1606b177da433feb20130
-)
-
-if (VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-  set(ADDITIONAL_PATCH "0003-uwp_fix.patch")
-endif()
-
-vcpkg_extract_source_archive_ex(
+vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    ARCHIVE ${ARCHIVE}
-    REF ${PODOFO_VERSION}
+    REPO podofo/podofo
+    REF "${VERSION}"
+    SHA512 ddc33e1265eac4650c1cd4f8c04dabae206bd8ca3eadefa310cd87066ce5e262ee1a5dbf395797e01cb4de05e390db2f1d54dffa26e8659b084a57fac97de03b
     PATCHES
-        0001-unique_ptr.patch
-        0002-HAVE_UNISTD_H.patch
-        ${ADDITIONAL_PATCH}
+        dependencies.diff
+)
+file(REMOVE_RECURSE
+    "${SOURCE_PATH}/3rdparty/date"
+    "${SOURCE_PATH}/3rdparty/fast_float.h"
+    "${SOURCE_PATH}/3rdparty/fmt"
+    "${SOURCE_PATH}/3rdparty/utf8cpp"
+    "${SOURCE_PATH}/3rdparty/utf8proc"
 )
 
-set(PODOFO_NO_FONTMANAGER ON)
-if("fontconfig" IN_LIST FEATURES)
-  set(PODOFO_NO_FONTMANAGER OFF)
-endif()
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        fontconfig  VCPKG_LOCK_FIND_PACKAGE_Fontconfig
+)
 
-string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" PODOFO_BUILD_SHARED)
 string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" PODOFO_BUILD_STATIC)
 
-set(IS_WIN32 OFF)
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore" OR NOT VCPKG_CMAKE_SYSTEM_NAME)
-    set(IS_WIN32 ON)
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DPKG_CONFIG_FOUND=true # enable pc file for shared linkage
+        -DPODOFO_BUILD_LIB_ONLY=1
+        -DPODOFO_BUILD_STATIC=${PODOFO_BUILD_STATIC}
+)
+vcpkg_cmake_install()
+vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/podofo)
+
+if(PODOFO_BUILD_STATIC)
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/podofo/auxiliary/basedefs.h" "#ifdef PODOFO_STATIC" "#if 1")
 endif()
 
-file(REMOVE ${SOURCE_PATH}/cmake/modules/FindOpenSSL.cmake)
-file(REMOVE ${SOURCE_PATH}/cmake/modules/FindZLIB.cmake)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
-    OPTIONS
-        -DPODOFO_BUILD_LIB_ONLY=1
-        -DPODOFO_BUILD_SHARED=${PODOFO_BUILD_SHARED}
-        -DPODOFO_BUILD_STATIC=${PODOFO_BUILD_STATIC}
-        -DPODOFO_NO_FONTMANAGER=${PODOFO_NO_FONTMANAGER}
-        -DCMAKE_DISABLE_FIND_PACKAGE_FONTCONFIG=${PODOFO_NO_FONTMANAGER}
-        -DCMAKE_DISABLE_FIND_PACKAGE_LIBCRYPTO=${IS_WIN32}
-        -DCMAKE_DISABLE_FIND_PACKAGE_LIBIDN=ON
-        -DCMAKE_DISABLE_FIND_PACKAGE_CppUnit=ON
-        -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON
-)
-
-vcpkg_install_cmake()
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-
-# Handle copyright
-file(COPY ${SOURCE_PATH}/COPYING DESTINATION ${CURRENT_PACKAGES_DIR}/share/podofo)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/podofo/COPYING ${CURRENT_PACKAGES_DIR}/share/podofo/copyright)
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

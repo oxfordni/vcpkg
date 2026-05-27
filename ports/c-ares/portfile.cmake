@@ -1,54 +1,48 @@
-if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    message(FATAL_ERROR "c-ares does not currently support UWP.")
-endif()
-
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO c-ares/c-ares
-    REF 9f1fdbf5dd633f81352fac0d6bc0d0c4d45be459
-    SHA512 2bb3696e839e37c6f2be4b979ae6d0eab2914d6f0ca043f688e3bb3071d2348cb64424049f019c16bc05d472dd61d5071e865edd229dce023a50f556a1961766
-    HEAD_REF master
+    REF "v${VERSION}"
+    SHA512 5fba9e7d97a8bd6741c13e1d4597aaeddc5766c8043bd4031bb899a0cf20d2446480b03261244b9569b4e42c03c8948b211c53e9f33c661c9f8200eb76e1c52a
+    HEAD_REF main
+    PATCHES
+        avoid-docs.patch
 )
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    set(CARES_STATIC 1)
-    set(CARES_SHARED 0)
-else()
-    set(CARES_STATIC 0)
-    set(CARES_SHARED 1)
-endif()
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" BUILD_STATIC)
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "dynamic" BUILD_SHARED)
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        tool        CARES_BUILD_TOOLS
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DCARES_STATIC=${CARES_STATIC}
-        -DCARES_SHARED=${CARES_SHARED}
+        ${FEATURE_OPTIONS}
+        -DCARES_STATIC=${BUILD_STATIC}
+        -DCARES_SHARED=${BUILD_SHARED}
+        -DCARES_BUILD_TESTS=OFF
+        -DCARES_BUILD_CONTAINER_TESTS=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
+vcpkg_copy_pdbs()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/c-ares)
+vcpkg_fixup_pkgconfig()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/c-ares)
-
-if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin)
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/bin)
-else()
-    file(GLOB EXE_FILES
-        "${CURRENT_PACKAGES_DIR}/bin/*.exe"
-        "${CURRENT_PACKAGES_DIR}/debug/bin/*.exe"
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string(
+        "${CURRENT_PACKAGES_DIR}/include/ares.h"
+        "#  ifdef CARES_STATICLIB" "#if 1"
     )
-    if (EXE_FILES)
-        file(REMOVE ${EXE_FILES})
-    endif()
 endif()
 
-vcpkg_copy_pdbs()
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include" "${CURRENT_PACKAGES_DIR}/debug/share")
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.md")
 
-# Handle copyright
-file(COPY ${SOURCE_PATH}/LICENSE.md DESTINATION ${CURRENT_PACKAGES_DIR}/share/c-ares)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/c-ares/LICENSE.md ${CURRENT_PACKAGES_DIR}/share/c-ares/copyright)
+if ("tool" IN_LIST FEATURES)
+    vcpkg_copy_tools(TOOL_NAMES adig ahost AUTO_CLEAN)
+endif()

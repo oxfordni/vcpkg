@@ -1,31 +1,33 @@
-include(vcpkg_common_functions)
-
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO eliaskosunen/scnlib
-    REF v0.1.2
-    SHA512 bb2aa176517d6547d62800839b7e9d86821a4006f7d09a8b3731b67f6fd7130f5cf8d73e7c8331c7c50f1dd5ca19bd3759bb0e181fcaed2f0bfb7fd8276ef141
+    REF "v${VERSION}"
+    SHA512 db14d71da3c1ecb849f00ac1e334f39c532592230e950aa1009ff00ba56670cb71e33ca457fd4ac66595ff43f0dca0e42d45f672848b9cde3cba80f19ef8693f
     HEAD_REF master
+    PATCHES
+        # support fast_float 7.0.0
+        scnlib-pr-136.patch
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-      -DSCN_TESTS=OFF 
+      -DSCN_TESTS=OFF
       -DSCN_EXAMPLES=OFF
       -DSCN_BENCHMARKS=OFF
       -DSCN_DOCS=OFF
-      -DSCN_RANGES=OFF
+      -DSCN_USE_EXTERNAL_FAST_FLOAT=ON
 )
 
-vcpkg_install_cmake()
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/scn)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/scn)
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include ${CURRENT_PACKAGES_DIR}/debug/share ${CURRENT_PACKAGES_DIR}/share/scn)
-file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/scnlib RENAME copyright)
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/scn"
+)
 
-
-vcpkg_test_cmake(PACKAGE_NAME scn)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

@@ -1,38 +1,34 @@
 # header-only library
 
-include(vcpkg_common_functions)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO QuantStack/xtensor-blas
-    REF 0.16.1
-    SHA512 3bdbd48b74d7be0b9f4ad2d435789e266b3cc1e043bbe73739978678bd1ca81504a688cdd80c03667305d210d299127be9939333c9bd0ac27dff0423ccb4861d
+    REPO xtensor-stack/xtensor-blas
+    REF "${VERSION}"
+    SHA512 4fcc5e485a2ddd9fee48dda75a38b976355c40a5e4722d4bc1e9fefa231c6c38f97afffeaef510c6c2290cf1f29cbbae889a131d121278055d23374d72d09712
     HEAD_REF master
 )
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     DISABLE_PARALLEL_CONFIGURE
-    OPTIONS_RELEASE -DCXXBLAS_DEBUG=OFF
-    OPTIONS_DEBUG -DCXXBLAS_DEBUG=ON
+    OPTIONS_RELEASE
+        -DCXXBLAS_DEBUG=OFF
+    OPTIONS_DEBUG
+        -DCXXBLAS_DEBUG=ON
     OPTIONS
         -DXTENSOR_USE_FLENS_BLAS=OFF
         -DBUILD_TESTS=OFF
         -DBUILD_BENCHMARK=OFF
-        -DDOWNLOAD_GTEST=OFF
-        -DDOWNLOAD_GBENCHMARK=OFF
 )
 
-vcpkg_install_cmake()
+vcpkg_cmake_install()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/${PORT})
+file(REMOVE "${CURRENT_PACKAGES_DIR}/include/xtensor-blas/xblas_config_cling.hpp")
 
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug ${CURRENT_PACKAGES_DIR}/lib)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/include/xflens/cxxblas/netlib)
+vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}")
+vcpkg_fixup_pkgconfig()
 
-# Handle copyright
-configure_file(${SOURCE_PATH}/LICENSE ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug" "${CURRENT_PACKAGES_DIR}/lib")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/include/xflens/cxxblas/netlib")
 
-# CMake integration test
-vcpkg_test_cmake(PACKAGE_NAME ${PORT})
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

@@ -1,95 +1,65 @@
-include(vcpkg_common_functions)
-set(BUILD_VERSION 1.14.0)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO mongodb/mongo-c-driver
-    REF ${BUILD_VERSION}
-    SHA512 bf2bb835543dd2a445aac6cafa7bbbf90921ec41014534779924a5eb7cbd9fd532acd8146ce81dfcf1bcac33a78d8fce22b962ed7f776449e4357eccab8d6110
+    REF "${VERSION}"
+    SHA512 68120e46868d04c194baacd73946aa20c239313eb8aa81afbcfed7482fc33e58e42df36ff14477969911da343cb74a73d554f595cca8b1af0db479ffcc6e53b6
     HEAD_REF master
-    PATCHES fix-uwp.patch
+    PATCHES
+        fix-include-directory.patch # vcpkg legacy decision
 )
+file(WRITE "${SOURCE_PATH}/VERSION_CURRENT" "${VERSION}")
 
+# Cannot use string(COMPARE EQUAL ...)
+set(ENABLE_STATIC OFF)
+set(ENABLE_SHARED OFF)
 if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
     set(ENABLE_STATIC ON)
 else()
-    set(ENABLE_STATIC OFF)
+    set(ENABLE_SHARED ON)
 endif()
 
-vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    DISABLE_PARALLEL_CONFIGURE # because it writes the file VERSION_CURRENT in the source directory
     OPTIONS
-        -DENABLE_MONGOC=OFF
+        "-DBUILD_VERSION=${VERSION}"
         -DENABLE_BSON=ON
-        -DENABLE_TESTS=OFF
         -DENABLE_EXAMPLES=OFF
+        -DENABLE_MONGOC=OFF
+        -DENABLE_SASL=OFF
+        -DENABLE_SNAPPY=OFF
+        -DENABLE_SRV=OFF
+        -DENABLE_SSL=OFF
         -DENABLE_STATIC=${ENABLE_STATIC}
-        -DBUILD_VERSION=${BUILD_VERSION}
+        -DENABLE_SHARED=${ENABLE_SHARED}
+        -DENABLE_TESTS=OFF
+        -DBUILD_TESTING=OFF
+        -DENABLE_UNINSTALL=OFF
+        -DENABLE_ZLIB=SYSTEM
+        -DENABLE_ZSTD=OFF
 )
 
-vcpkg_install_cmake()
-if (VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/libbson-static-1.0)
-else()
-    vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/libbson-1.0)
-endif()
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/share/mongo-c-driver)
-
-# This rename is needed because the official examples expect to use #include <bson.h>
-# See Microsoft/vcpkg#904
-file(RENAME
-    ${CURRENT_PACKAGES_DIR}/include/libbson-1.0
-    ${CURRENT_PACKAGES_DIR}/temp)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/include)
-file(RENAME ${CURRENT_PACKAGES_DIR}/temp ${CURRENT_PACKAGES_DIR}/include)
-
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
-
-if (VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    if(VCPKG_CMAKE_SYSTEM_NAME AND NOT VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-        file(RENAME
-            ${CURRENT_PACKAGES_DIR}/lib/libbson-static-1.0.a
-            ${CURRENT_PACKAGES_DIR}/lib/libbson-1.0.a)
-        file(RENAME
-            ${CURRENT_PACKAGES_DIR}/debug/lib/libbson-static-1.0.a
-            ${CURRENT_PACKAGES_DIR}/debug/lib/libbson-1.0.a)
-    else()
-        file(RENAME
-            ${CURRENT_PACKAGES_DIR}/lib/bson-static-1.0.lib
-            ${CURRENT_PACKAGES_DIR}/lib/bson-1.0.lib)
-        file(RENAME
-            ${CURRENT_PACKAGES_DIR}/debug/lib/bson-static-1.0.lib
-            ${CURRENT_PACKAGES_DIR}/debug/lib/bson-1.0.lib)
-    endif()
-
-    # drop the __declspec(dllimport) when building static
-    vcpkg_apply_patches(
-        SOURCE_PATH ${CURRENT_PACKAGES_DIR}/include
-        PATCHES static.patch
-    )
-
-    file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/bin ${CURRENT_PACKAGES_DIR}/bin)
-endif()
-
-configure_file(${SOURCE_PATH}/COPYING ${CURRENT_PACKAGES_DIR}/share/libbson/copyright COPYONLY)
-file(COPY ${SOURCE_PATH}/THIRD_PARTY_NOTICES DESTINATION ${CURRENT_PACKAGES_DIR}/share/libbson)
-
-if (VCPKG_LIBRARY_LINKAGE STREQUAL static)
-    set(PORT_POSTFIX "static-1.0")
-else()
-    set(PORT_POSTFIX "1.0")
-endif()
-
-# Create cmake files for _both_ find_package(libbson) and find_package(libbson-static-1.0)/find_package(libbson-1.0)
-file(READ ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-${PORT_POSTFIX}-config.cmake LIBBSON_CONFIG_CMAKE)
-string(REPLACE "/include/libbson-1.0" "/include" LIBBSON_CONFIG_CMAKE "${LIBBSON_CONFIG_CMAKE}")
-string(REPLACE "bson-static-1.0" "bson-1.0" LIBBSON_CONFIG_CMAKE "${LIBBSON_CONFIG_CMAKE}")
-file(WRITE ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-${PORT_POSTFIX}-config.cmake "${LIBBSON_CONFIG_CMAKE}")
-file(COPY ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-${PORT_POSTFIX}-config.cmake DESTINATION ${CURRENT_PACKAGES_DIR}/share/libbson-${PORT_POSTFIX})
-file(COPY ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-${PORT_POSTFIX}-config-version.cmake DESTINATION ${CURRENT_PACKAGES_DIR}/share/libbson-${PORT_POSTFIX})
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-${PORT_POSTFIX}-config.cmake ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-config.cmake)
-file(RENAME ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-${PORT_POSTFIX}-config-version.cmake ${CURRENT_PACKAGES_DIR}/share/libbson/libbson-config-version.cmake)
-
+vcpkg_cmake_install()
 vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
+
+vcpkg_cmake_config_fixup(PACKAGE_NAME "bson-${VERSION}" CONFIG_PATH "lib/cmake/bson-${VERSION}")
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/include/bson/macros.h"
+        "#define BSON_MACROS_H" "#define BSON_MACROS_H\n#ifndef BSON_STATIC\n#define BSON_STATIC\n#endif")
+endif()
+
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/mongo-c-driver"
+)
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION  "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+
+vcpkg_install_copyright(
+    FILE_LIST
+        "${SOURCE_PATH}/COPYING"
+        "${SOURCE_PATH}/THIRD_PARTY_NOTICES"
+        "${SOURCE_PATH}/src/libbson/THIRD_PARTY_NOTICES"
+)

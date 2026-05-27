@@ -1,111 +1,40 @@
-include(vcpkg_common_functions)
-
-set(FLINT_VERSION 2.5.2)
-set(FLINT_HASH "8606b369af505d5fcedd05d95fcd04afac2a916fc5291501c56785891cfdb2f9bc98700b2d05afd1d9482fb96df2a8c8bf1cd0e5696df46775df9fa743eb900b")
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/flint-${FLINT_VERSION})
-
-vcpkg_download_distfile(ARCHIVE_FILE
-    URLS "http://www.flintlib.org/flint-${FLINT_VERSION}.zip"
-    FILENAME "flint-${FLINT_VERSION}.zip"
-    SHA512 ${FLINT_HASH}
-)
-vcpkg_extract_source_archive(${ARCHIVE_FILE})
-
-vcpkg_apply_patches(
-    SOURCE_PATH ${SOURCE_PATH}
-    PATCHES "${CMAKE_CURRENT_LIST_DIR}/lib_flint.patch"
-            "${CMAKE_CURRENT_LIST_DIR}/dll_flint.patch"
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO flintlib/flint
+    REF v${VERSION}
+    SHA512 fbb6f0945b589e237d707c3b6963f7bb7fc1b9e5b511f5f8ed805f14f85b317c79a9eedc7ae28d34837f7126eac86dd4a9c8e7258560da3413c599eb64d367f7
+    HEAD_REF master
+    PATCHES
 )
 
-set(MSVC_VERSION 14)
-
-file(REMOVE_RECURSE ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET})
-file(MAKE_DIRECTORY ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET})
-file(COPY ${SOURCE_PATH} DESTINATION ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET})
-get_filename_component(SOURCE_DIR_NAME "${SOURCE_PATH}" NAME)
-
-# Use fresh copy of sources for building and modification
-set(SOURCE_PATH "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}/${SOURCE_DIR_NAME}")
-
-file(TO_NATIVE_PATH ${CURRENT_INSTALLED_DIR} NATIVE_INSTALLED_DIR)
-configure_file(
-	"${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/dll_flint.vcxproj" "${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/dll_flint.vcxproj" @ONLY
-)
-configure_file(
-	"${SOURCE_PATH}/build.vc${MSVC_VERSION}/lib_flint/lib_flint.vcxproj" "${SOURCE_PATH}/build.vc${MSVC_VERSION}/lib_flint/lib_flint.vcxproj" @ONLY
-)
-
-file(RENAME "${SOURCE_PATH}/fmpz-conversions-gc.in" "${SOURCE_PATH}/fmpz-conversions.h")
-
-IF (VCPKG_TARGET_ARCHITECTURE MATCHES "x86")
-	file(RENAME "${SOURCE_PATH}/fft_tuning32.in" "${SOURCE_PATH}/fft_tuning.h")
-ELSE()
-	file(RENAME "${SOURCE_PATH}/fft_tuning64.in" "${SOURCE_PATH}/fft_tuning.h")
-ENDIF()
-
-if (VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
-	vcpkg_build_msbuild(
-		PROJECT_PATH ${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/dll_flint.vcxproj
-	)
+if(VCPKG_TARGET_IS_WINDOWS)
+    vcpkg_find_acquire_program(PYTHON3)
+    vcpkg_cmake_configure(
+        SOURCE_PATH "${SOURCE_PATH}"
+        OPTIONS
+            "-DPython_EXECUTABLE=${PYTHON3}"
+            -DVCPKG_LOCK_FIND_PACKAGE_CBLAS=OFF
+            -DWITH_NTL=OFF
+    )
+    vcpkg_cmake_install()
+    vcpkg_copy_pdbs()
+    vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/flint)
 else()
-	vcpkg_build_msbuild(
-		PROJECT_PATH ${SOURCE_PATH}/build.vc${MSVC_VERSION}/lib_flint/lib_flint.vcxproj
-	)
+    vcpkg_make_configure(
+        SOURCE_PATH "${SOURCE_PATH}"
+        AUTORECONF
+        OPTIONS
+            --with-ntl=no
+            --with-blas=no
+    )
+    vcpkg_make_install()
 endif()
 
-IF (VCPKG_TARGET_ARCHITECTURE MATCHES "x86")
-	SET(BUILD_ARCH "Win32")
-ELSE()
-	SET(BUILD_ARCH ${VCPKG_TARGET_ARCHITECTURE})
-ENDIF()
+vcpkg_fixup_pkgconfig()
 
-if (VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
-	file(GLOB FLINT_HEADERS "${SOURCE_PATH}/dll/${BUILD_ARCH}/Release/*.h")
-	file(INSTALL
-		${FLINT_HEADERS}
-		DESTINATION ${CURRENT_PACKAGES_DIR}/include/flint
-	)
-	file(INSTALL
-		${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/${BUILD_ARCH}/Release/dll_flint.dll
-		DESTINATION ${CURRENT_PACKAGES_DIR}/bin
-	)
-	file(INSTALL
-		${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/${BUILD_ARCH}/Debug/dll_flint.dll
-		DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin
-	)
-	file(INSTALL
-		${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/${BUILD_ARCH}/Release/dll_flint.lib
-		DESTINATION ${CURRENT_PACKAGES_DIR}/lib
-		RENAME flint.lib
-	)
-	file(INSTALL
-		${SOURCE_PATH}/build.vc${MSVC_VERSION}/dll_flint/${BUILD_ARCH}/Debug/dll_flint.lib
-		DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib
-		RENAME flint.lib
-	)
-	vcpkg_copy_pdbs()
-else()
-	file(GLOB FLINT_HEADERS "${SOURCE_PATH}/lib/${BUILD_ARCH}/Release/*.h")
-	file(INSTALL
-		${FLINT_HEADERS}
-		DESTINATION ${CURRENT_PACKAGES_DIR}/include/flint
-	)
-	file(INSTALL
-		${SOURCE_PATH}/build.vc${MSVC_VERSION}/lib_flint/${BUILD_ARCH}/Release/lib_flint.lib
-		DESTINATION ${CURRENT_PACKAGES_DIR}/lib
-		RENAME flint.lib
-	)
-	file(INSTALL
-		${SOURCE_PATH}/build.vc${MSVC_VERSION}/lib_flint/${BUILD_ARCH}/Debug/lib_flint.lib
-		DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib
-		RENAME flint.lib
-	)
-endif()
-
-file(INSTALL
-	${SOURCE_PATH}/gpl-2.0.txt
-	DESTINATION ${CURRENT_PACKAGES_DIR}/share/flint
-	RENAME copyright
+file(REMOVE_RECURSE 
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
 )
 
-message(STATUS "Installing done")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")
